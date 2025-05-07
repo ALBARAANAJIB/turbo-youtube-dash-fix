@@ -1,0 +1,58 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube Enhancer</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div id="popup-container">
+    <div class="header">
+      <img src="icons/icon.png" alt="YouTube Enhancer" class="logo">
+      <h1>YouTube Enhancer</h1>
+    </div>
+    
+    <div id="login-container">
+      <p>Login with your YouTube account to use this extension</p>
+      <button id="login-button" class="primary-button">Sign in with YouTube</button>
+    </div>
+    
+    <div id="features-container" style="display: none;">
+      <div class="user-info">
+        <div class="avatar">
+          <span class="avatar-initial" id="user-initial">A</span>
+        </div>
+        <span id="user-email">user@example.com</span>
+      </div>
+      
+      <h2>YouTube Features</h2>
+      
+      <div class="feature-button">
+        <button id="fetch-videos" class="feature-btn">Fetch 50 liked videos</button>
+        <span class="arrow">→</span>
+      </div>
+      
+      <div class="feature-button primary">
+        <button id="open-dashboard" class="feature-btn primary">Open Dashboard</button>
+      </div>
+      
+      <div class="feature-button">
+        <button id="export-data" class="feature-btn">Export data</button>
+        <span class="arrow">→</span>
+      </div>
+      
+      <div class="feature-button">
+        <button id="ai-summary" class="feature-btn">AI Video Summary</button>
+        <span class="arrow">→</span>
+      </div>
+      
+      <div class="sign-out">
+        <button id="sign-out" class="text-button">Sign out</button>
+      </div>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
