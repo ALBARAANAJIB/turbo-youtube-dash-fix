@@ -26,19 +26,47 @@
 
     <main>
       <div class="dashboard-header">
-        <h2>Your Liked Videos</h2>
-        <div class="actions">
+        <div class="header-top">
+          <h2>Your Liked Videos</h2>
+          <div class="header-buttons">
+            <button id="fetch-subscriptions" class="secondary-button">Fetch Subscriptions</button>
+          </div>
+        </div>
+        
+        <div class="filters-section">
           <div class="search-container">
             <input type="text" id="search" placeholder="Search videos...">
           </div>
+          
           <div class="filter-container">
             <select id="filter">
-              <option value="all">All Videos</option>
               <option value="recent">Recently Liked</option>
               <option value="oldest">Oldest First</option>
               <option value="popular">Most Popular</option>
             </select>
           </div>
+          
+          <div class="filter-container">
+            <select id="channel-filter">
+              <option value="all">All Channels</option>
+            </select>
+          </div>
+          
+          <form id="date-filter-form" class="date-filter-container">
+            <div class="date-input-group">
+              <label for="start-date">From:</label>
+              <input type="date" id="start-date" name="start-date">
+            </div>
+            <div class="date-input-group">
+              <label for="end-date">To:</label>
+              <input type="date" id="end-date" name="end-date">
+            </div>
+            <button type="submit" class="filter-button">Apply</button>
+          </form>
+        </div>
+        
+        <div class="progress-container">
+          <span id="progress-indicator">Loading videos...</span>
         </div>
       </div>
 
@@ -53,6 +81,7 @@
           <span id="selection-count">0 videos selected</span>
         </div>
         <div class="bulk-actions">
+          <button id="select-100" class="secondary-button">Select 100</button>
           <button id="select-all" class="secondary-button">Select All</button>
           <button id="delete-selected" class="danger-button" disabled>Delete Selected</button>
         </div>
