@@ -1,3 +1,4 @@
+
 document.addEventListener('DOMContentLoaded', () => {
   const videoList = document.getElementById('video-list');
   const loadingElement = document.getElementById('loading');
@@ -19,6 +20,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const userInitial = document.getElementById('user-initial');
   const progressIndicator = document.getElementById('progress-indicator');
   const fetchSubscriptionsButton = document.getElementById('fetch-subscriptions');
+  const subscriptionsContainer = document.getElementById('subscriptions-container');
+  const subscriptionsList = document.getElementById('subscriptions-list');
   
   let videos = [];
   let allVideos = []; // Store all fetched videos
@@ -26,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let channels = new Set(); // Store unique channels
   let isLoading = false;
   let hasMoreVideos = false;
+  let toastTimeout = null;
   
   // Initialize the dashboard
   init();
@@ -90,11 +94,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load videos
     chrome.storage.local.get(['likedVideos', 'nextPageToken', 'totalResults'], (result) => {
       if (result.likedVideos && result.likedVideos.length > 0) {
-        videos = result.likedVideos;
-        allVideos = [...videos];
+        allVideos = result.likedVideos;
         
         // Extract unique channels
-        videos.forEach(video => {
+        allVideos.forEach(video => {
           if (video.channelTitle) {
             channels.add(video.channelTitle);
           }
@@ -107,14 +110,57 @@ document.addEventListener('DOMContentLoaded', () => {
         renderVideos();
         
         // Show total count and pagination info
-        updateProgressIndicator(videos.length, result.totalResults || videos.length);
+        updateProgressIndicator(allVideos.length, result.totalResults || allVideos.length);
         
         // Check if there are more videos to load
         hasMoreVideos = !!result.nextPageToken;
+        
+        // Load subscriptions
+        loadSubscriptions();
       } else {
         loadingElement.style.display = 'none';
         noVideosElement.style.display = 'block';
       }
+    });
+  }
+  
+  // Function to load and display subscriptions
+  function loadSubscriptions() {
+    chrome.storage.local.get('subscriptions', (result) => {
+      if (result.subscriptions && result.subscriptions.length > 0) {
+        displaySubscriptions(result.subscriptions);
+      }
+    });
+  }
+  
+  // Function to display subscriptions
+  function displaySubscriptions(subscriptions) {
+    if (!subscriptions || subscriptions.length === 0) return;
+    
+    subscriptionsContainer.style.display = 'block';
+    subscriptionsList.innerHTML = '';
+    
+    subscriptions.forEach(sub => {
+      const subCard = document.createElement('div');
+      subCard.className = 'subscription-card';
+      
+      subCard.innerHTML = `
+        <div class="subscription-thumbnail">
+          <img src="${sub.thumbnail}" alt="${sub.title}" onerror="this.src='icons/icon.png'">
+        </div>
+        <div class="subscription-details">
+          <div class="subscription-title">${sub.title}</div>
+          <a href="https://www.youtube.com/channel/${sub.channelId}" target="_blank" class="view-channel">View Channel</a>
+        </div>
+      `;
+      
+      subCard.addEventListener('click', () => {
+        // Filter videos by this channel
+        channelFilterSelect.value = sub.title;
+        renderVideos();
+      });
+      
+      subscriptionsList.appendChild(subCard);
     });
   }
   
@@ -203,18 +249,12 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Update the progress indicator
             updateProgressIndicator(allVideos.length, response.totalResults || allVideos.length);
+
+            // Show toast notification
+            showToast(`Loaded ${newVideos.length} more videos`);
           } else {
             // Show error message
-            const errorMsg = document.createElement('div');
-            errorMsg.className = 'error-message';
-            errorMsg.textContent = 'Failed to load more videos. Try again later.';
-            videoList.appendChild(errorMsg);
-            
-            // Remove error after 5 seconds
-            setTimeout(() => {
-              const errorElements = document.querySelectorAll('.error-message');
-              errorElements.forEach(el => el.remove());
-            }, 5000);
+            showToast('Failed to load more videos. Try again later.', 'error');
           }
         });
       }
@@ -257,7 +297,7 @@ document.addEventListener('DOMContentLoaded', () => {
                           video.channelTitle.toLowerCase().includes(searchTerm);
       
       // Channel filter
-      const matchesChannel = !channelFilter || channelFilter === 'all' || 
+      const matchesChannel = channelFilter === 'all' || 
                            video.channelTitle === channelFilter;
       
       // Date filter
@@ -307,7 +347,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Show no videos message if needed
     if (filteredVideos.length === 0) {
-      if (searchTerm || filterValue !== 'all' || channelFilter !== 'all' || startDate || endDate) {
+      if (searchTerm || filterValue !== 'recent' || channelFilter !== 'all' || startDate || endDate) {
         noVideosElement.textContent = 'No videos match your search or filters.';
       } else {
         noVideosElement.textContent = 'No liked videos found. Try fetching videos first.';
@@ -336,7 +376,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     card.innerHTML = `
       <div class="video-thumbnail">
-        <img src="${video.thumbnail}" alt="${video.title}">
+        <img src="${video.thumbnail}" alt="${video.title}" onerror="this.src='icons/icon.png'">
         <div class="checkbox-container">
           <input type="checkbox" class="video-checkbox" data-id="${video.id}">
         </div>
@@ -397,15 +437,12 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Re-render videos
         renderVideos();
-      } else {
-        // Show error message
-        const errorMsg = document.createElement('div');
-        errorMsg.className = 'error-message';
-        errorMsg.textContent = 'Failed to delete video. Please try again.';
-        videoList.prepend(errorMsg);
         
-        // Remove error after 5 seconds
-        setTimeout(() => errorMsg.remove(), 5000);
+        // Show success toast
+        showToast('Video removed from liked videos');
+      } else {
+        // Show error toast
+        showToast('Failed to delete video. Please try again.', 'error');
       }
     });
   }
@@ -431,6 +468,13 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Update selection count
     updateSelectionCount();
+    
+    // Show notification about selection
+    if (videosToSelect.length < 100) {
+      showToast(`Selected ${videosToSelect.length} videos (less than 100 available)`, 'info');
+    } else {
+      showToast('Selected 100 videos', 'success');
+    }
   }
   
   // Toggle select all videos
@@ -438,20 +482,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const checkboxes = document.querySelectorAll('.video-checkbox');
     
     // Check if all are selected
-    const allSelected = checkboxes.length === selectedVideos.size;
+    const allSelected = videos.length > 0 && videos.every(video => selectedVideos.has(video.id));
     
     if (allSelected) {
       // Deselect all
-      selectedVideos.clear();
+      videos.forEach(video => selectedVideos.delete(video.id));
       checkboxes.forEach(checkbox => {
         checkbox.checked = false;
       });
+      showToast('All videos deselected');
     } else {
       // Select all visible videos
+      videos.forEach(video => selectedVideos.add(video.id));
       checkboxes.forEach(checkbox => {
         checkbox.checked = true;
-        selectedVideos.add(checkbox.getAttribute('data-id'));
       });
+      showToast(`Selected all ${videos.length} videos`);
     }
     
     // Update selection count
@@ -520,9 +566,11 @@ document.addEventListener('DOMContentLoaded', () => {
           loadingElement.style.display = 'none';
           renderVideos();
           
-          // Show result
+          // Show result toast
           if (failed > 0) {
-            alert(`Successfully removed ${deleted} videos. Failed to remove ${failed} videos.`);
+            showToast(`Removed ${deleted} videos, ${failed} failed`, 'warning');
+          } else {
+            showToast(`Successfully removed ${deleted} videos`, 'success');
           }
         }
       });
@@ -539,24 +587,64 @@ document.addEventListener('DOMContentLoaded', () => {
       fetchSubscriptionsButton.textContent = 'Fetch Subscriptions';
       
       if (response && response.success) {
-        // Show success message
-        const successMsg = document.createElement('div');
-        successMsg.className = 'success-message';
-        successMsg.textContent = `${response.count} subscriptions fetched!`;
-        fetchSubscriptionsButton.parentNode.insertBefore(successMsg, fetchSubscriptionsButton.nextSibling);
+        // Show success toast
+        showToast(`${response.count} subscriptions fetched!`, 'success');
         
-        // Remove success message after 3 seconds
-        setTimeout(() => successMsg.remove(), 3000);
-        
-        // Handle the fetched subscriptions
-        // This could open a new tab, display them in a modal, etc.
-        if (response.openDashboard) {
-          chrome.tabs.create({ url: chrome.runtime.getURL('subscriptions.html') });
-        }
+        // Load and display the fetched subscriptions
+        chrome.storage.local.get('subscriptions', (result) => {
+          if (result.subscriptions) {
+            displaySubscriptions(result.subscriptions);
+          }
+        });
       } else {
-        // Show error message
-        alert('Failed to fetch subscriptions. Please try again later.');
+        // Show error toast
+        showToast('Failed to fetch subscriptions. Please try again later.', 'error');
       }
     });
+  }
+  
+  // Function to show toast messages
+  function showToast(message, type = 'success') {
+    // Clear any existing toast
+    if (toastTimeout) {
+      clearTimeout(toastTimeout);
+    }
+    
+    // Create or get toast container
+    let toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+      toastContainer = document.createElement('div');
+      toastContainer.id = 'toast-container';
+      document.body.appendChild(toastContainer);
+    }
+    
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+      <div class="toast-content">
+        <span class="toast-icon">${type === 'success' ? '✓' : type === 'error' ? '✕' : type === 'warning' ? '!' : 'ℹ'}</span>
+        <span class="toast-message">${message}</span>
+      </div>
+    `;
+    
+    // Add to container
+    toastContainer.appendChild(toast);
+    
+    // Add show class after a brief delay for animation
+    setTimeout(() => {
+      toast.classList.add('show');
+    }, 10);
+    
+    // Remove after 3 seconds
+    toastTimeout = setTimeout(() => {
+      toast.classList.remove('show');
+      // Remove from DOM after animation completes
+      setTimeout(() => {
+        if (toastContainer.contains(toast)) {
+          toastContainer.removeChild(toast);
+        }
+      }, 300); // Match transition duration
+    }, 3000);
   }
 });

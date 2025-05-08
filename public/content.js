@@ -131,9 +131,8 @@ function injectFetchButton() {
   // Check if we're on a YouTube page
   if (!window.location.hostname.includes('youtube.com')) return;
   
-  // Check if we're on the liked videos page or any page with a playlist header
-  const isLikedVideosPage = window.location.href.includes('playlist?list=LL') || 
-                          document.querySelector('ytd-playlist-header-renderer');
+  // Check if we're on the liked videos page
+  const isLikedVideosPage = window.location.href.includes('playlist?list=LL');
   
   if (!isLikedVideosPage) return;
   
@@ -146,7 +145,7 @@ function injectFetchButton() {
   fetchButton.id = 'youtube-enhancer-fetch-button';
   fetchButton.textContent = 'Fetch My Liked Videos';
   fetchButton.style.cssText = `
-    background-color: rgba(0, 0, 0, 0.1);
+    background-color: rgba(0, 0, 0, 0.6);
     color: white;
     border: none;
     border-radius: 18px;
@@ -162,16 +161,16 @@ function injectFetchButton() {
     transition: background-color 0.2s;
     backdrop-filter: blur(5px);
     -webkit-backdrop-filter: blur(5px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   `;
   
   // Add hover effect
   fetchButton.addEventListener('mouseenter', () => {
-    fetchButton.style.backgroundColor = 'rgba(0, 0, 0, 0.2)';
+    fetchButton.style.backgroundColor = 'rgba(255, 0, 0, 0.7)';
   });
   
   fetchButton.addEventListener('mouseleave', () => {
-    fetchButton.style.backgroundColor = 'rgba(0, 0, 0, 0.1)';
+    fetchButton.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
   });
   
   // Add click event
@@ -201,152 +200,74 @@ function injectFetchButton() {
     });
   });
   
-  // Find a good place to insert the button
-  const insertButton = () => {
-    // Try to find elements near the Play All and Shuffle buttons
-    const playAllButton = document.querySelector('ytd-button-renderer[id="play-button"]');
-    const shuffleButton = document.querySelector('ytd-button-renderer[id="shuffle-button"]');
-    const actionsArea = playAllButton?.closest('div#top-level-buttons-computed') || 
-                     shuffleButton?.closest('div#top-level-buttons-computed');
-    
-    if (actionsArea) {
-      actionsArea.appendChild(fetchButton);
-      return true;
-    }
-    
-    // Try other selectors as fallback
-    const selectors = [
-      'ytd-playlist-header-renderer #top-level-buttons-computed',
-      'ytd-playlist-sidebar-renderer',
-      'ytd-playlist-header-renderer',
-      '#above-the-fold'
-    ];
-    
-    let inserted = false;
-    
-    for (const selector of selectors) {
-      const element = document.querySelector(selector);
-      if (element) {
-        // Insert after the first child or append if no children
-        if (element.firstChild) {
-          element.appendChild(fetchButton);
-        } else {
-          element.appendChild(fetchButton);
-        }
-        inserted = true;
-        break;
-      }
-    }
-    
-    // If all else fails, try the page manager
-    if (!inserted) {
-      const pageManager = document.querySelector('ytd-page-manager');
-      if (pageManager) {
-        pageManager.prepend(fetchButton);
-        inserted = true;
-      }
-    }
-    
-    return inserted;
-  };
+  // Try to insert the button near the Play All and Shuffle buttons
+  const playAllButton = document.querySelector('ytd-button-renderer[id="play-button"]');
+  const shuffleButton = document.querySelector('ytd-button-renderer[id="shuffle-button"]');
   
-  // Try to insert the button, if it fails, wait for the DOM to load more
-  if (!insertButton()) {
-    const observer = new MutationObserver((mutations, obs) => {
-      if (insertButton()) {
-        obs.disconnect(); // Stop observing once button is inserted
-      }
-    });
-    
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
-    
-    // Stop observing after 10 seconds to prevent memory leaks
-    setTimeout(() => observer.disconnect(), 10000);
+  if (playAllButton || shuffleButton) {
+    const buttonContainer = (playAllButton || shuffleButton).closest('#top-level-buttons-computed');
+    if (buttonContainer) {
+      buttonContainer.appendChild(fetchButton);
+      return;
+    }
+  }
+  
+  // Fallback: Insert after the playlist header
+  const playlistHeader = document.querySelector('ytd-playlist-header-renderer');
+  if (playlistHeader) {
+    playlistHeader.appendChild(fetchButton);
   }
 }
 
-// Handle URL changes (YouTube is a SPA)
-function handleUrlChange() {
-  let lastUrl = location.href;
-  
-  // Call once on initial load
-  injectFetchButton();
-  
-  // Create an observer to watch for URL changes
-  const observer = new MutationObserver(() => {
-    if (lastUrl !== location.href) {
-      lastUrl = location.href;
-      setTimeout(injectFetchButton, 1000); // Delay to ensure page loads
-    }
-  });
-  
-  // Start observing
-  observer.observe(document.body, { subtree: true, childList: true });
-}
-
-// Initialize when DOM is fully loaded
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', handleUrlChange);
-} else {
-  handleUrlChange();
-}
-
-// Re-inject button when visibility changes (e.g., if "show unavailable videos" is toggled)
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') {
-    setTimeout(injectFetchButton, 1000);
+// Create a MutationObserver to watch for DOM changes
+const observer = new MutationObserver((mutations) => {
+  // Check if we're on the liked videos page
+  const isLikedVideosPage = window.location.href.includes('playlist?list=LL');
+  if (isLikedVideosPage) {
+    // Try to add the button when DOM changes
+    injectFetchButton();
   }
 });
 
-// Re-check for the button periodically to ensure it's still there
-// This helps if YouTube's UI changes or elements get removed
-setInterval(injectFetchButton, 5000);
+// Watch for changes in the page content
+observer.observe(document.body, {
+  childList: true,
+  subtree: true
+});
 
-// Specifically watch for changes to the playlist options that show/hide unavailable videos
-function watchForPlaylistChanges() {
-  const observer = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-      if (mutation.type === 'childList' || mutation.type === 'attributes') {
-        setTimeout(injectFetchButton, 500);
-      }
-    }
-  });
-  
-  // Try to find the container that holds the menu options
-  const setupObserver = () => {
-    const menuContainer = document.querySelector('ytd-playlist-header-renderer tp-yt-paper-listbox');
-    if (menuContainer) {
-      observer.observe(menuContainer, {
-        childList: true,
-        subtree: true,
-        attributes: true
-      });
-      return true;
-    }
-    return false;
-  };
-  
-  // Try immediately
-  if (!setupObserver()) {
-    // If not found, wait for changes to the DOM
-    const bodyObserver = new MutationObserver(() => {
-      if (setupObserver()) {
-        bodyObserver.disconnect();
-      }
-    });
+// Also watch for URL changes (YouTube is a SPA)
+let lastUrl = location.href;
+new MutationObserver(() => {
+  if (lastUrl !== location.href) {
+    lastUrl = location.href;
     
-    bodyObserver.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
-    
-    // Stop looking after 30 seconds to prevent memory leaks
-    setTimeout(() => bodyObserver.disconnect(), 30000);
+    // Wait for content to load
+    setTimeout(() => {
+      if (location.href.includes('playlist?list=LL')) {
+        injectFetchButton();
+      }
+    }, 1000);
   }
+}).observe(document, { subtree: true, childList: true });
+
+// Initial injection
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', injectFetchButton);
+} else {
+  injectFetchButton();
 }
 
-// Start watching for playlist changes
-watchForPlaylistChanges();
+// Handle visibility changes
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && 
+      location.href.includes('playlist?list=LL')) {
+    setTimeout(injectFetchButton, 500);
+  }
+});
+
+// Re-inject the button periodically to ensure it's present
+setInterval(() => {
+  if (location.href.includes('playlist?list=LL')) {
+    injectFetchButton();
+  }
+}, 3000);

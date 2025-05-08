@@ -29,7 +29,9 @@
         <div class="header-top">
           <h2>Your Liked Videos</h2>
           <div class="header-buttons">
-            <button id="fetch-subscriptions" class="secondary-button">Fetch Subscriptions</button>
+            <button id="fetch-subscriptions" class="secondary-button">
+              <span class="button-icon">👥</span> Fetch Subscriptions
+            </button>
           </div>
         </div>
         
@@ -70,6 +72,11 @@
         </div>
       </div>
 
+      <div id="subscriptions-container" style="display: none;">
+        <h3>Your Subscriptions</h3>
+        <div id="subscriptions-list" class="subscriptions-grid"></div>
+      </div>
+
       <div id="videos-container">
         <div id="loading">Loading your videos...</div>
         <div id="no-videos" style="display: none;">No liked videos found. Try fetching videos first.</div>
@@ -99,7 +106,9 @@
       </div>
     </div>
   </div>
+  
+  <div id="toast-container"></div>
 
-  <script src="dashboard.js"></script>
+  <script src="dashboard.js" type="module"></script>
 </body>
 </html>
