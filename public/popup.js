@@ -4,9 +4,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const loginContainer = document.getElementById('login-container');
   const featuresContainer = document.getElementById('features-container');
   const fetchVideosButton = document.getElementById('fetch-videos');
-  const fetchSubscriptionsButton = document.getElementById('fetch-subscriptions');
   const openDashboardButton = document.getElementById('open-dashboard');
   const exportDataButton = document.getElementById('export-data');
+  const aiSummaryButton = document.getElementById('ai-summary');
   const signOutButton = document.getElementById('sign-out');
   const userEmail = document.getElementById('user-email');
   const userInitial = document.getElementById('user-initial');
@@ -87,35 +87,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
-  
-  // Fetch subscriptions
-  fetchSubscriptionsButton.addEventListener('click', () => {
-    fetchSubscriptionsButton.disabled = true;
-    const originalText = fetchSubscriptionsButton.textContent;
-    fetchSubscriptionsButton.textContent = 'Fetching...';
-    
-    chrome.runtime.sendMessage({ action: 'fetchSubscriptions' }, (response) => {
-      fetchSubscriptionsButton.disabled = false;
-      fetchSubscriptionsButton.textContent = originalText;
-      
-      if (response && response.success) {
-        // Show a success message in the popup
-        const successMessage = document.createElement('div');
-        successMessage.classList.add('success-message');
-        successMessage.textContent = `${response.count} subscriptions fetched!`;
-        
-        // Insert after the fetch button
-        fetchSubscriptionsButton.parentNode.insertBefore(successMessage, fetchSubscriptionsButton.nextSibling);
-        
-        // Remove after 3 seconds
-        setTimeout(() => {
-          successMessage.remove();
-        }, 3000);
-      } else {
-        alert('Failed to fetch subscriptions. Please try again.');
-      }
-    });
-  });
 
   // Open dashboard
   openDashboardButton.addEventListener('click', () => {
@@ -127,9 +98,14 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.runtime.sendMessage({ action: 'exportData' });
   });
 
+  // AI Summary
+  aiSummaryButton.addEventListener('click', () => {
+    chrome.runtime.sendMessage({ action: 'aiSummary' });
+  });
+
   // Sign out
   signOutButton.addEventListener('click', () => {
-    chrome.storage.local.remove(['userToken', 'userInfo', 'likedVideos', 'subscriptions'], () => {
+    chrome.storage.local.remove(['userToken', 'userInfo', 'likedVideos'], () => {
       loginContainer.style.display = 'block';
       featuresContainer.style.display = 'none';
     });

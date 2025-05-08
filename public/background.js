@@ -15,7 +15,6 @@ const LIKED_VIDEOS_ENDPOINT = `${API_BASE}/videos`;
 const USER_INFO_ENDPOINT = 'https://www.googleapis.com/oauth2/v1/userinfo';
 const PLAYLIST_ITEMS_ENDPOINT = `${API_BASE}/playlistItems`;
 const CHANNELS_ENDPOINT = `${API_BASE}/channels`;
-const SUBSCRIPTIONS_ENDPOINT = `${API_BASE}/subscriptions`;
 
 // Handle messages from popup.js and content.js
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -57,8 +56,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
       try {
         console.log('Fetching liked videos...');
-        // Fetch up to 100 videos (maximum allowed by the API in one request)
-        const response = await fetch(`${LIKED_VIDEOS_ENDPOINT}?part=snippet,statistics&maxResults=100&myRating=like`, {
+        // First get the user's "liked videos" playlist ID
+        const channelResponse = await fetch(`${CHANNELS_ENDPOINT}?part=contentDetails&mine=true`, {
+          headers: { Authorization: `Bearer ${result.userToken}` }
+        });
+        
+        if (!channelResponse.ok) throw new Error('Failed to fetch channel data');
+        
+        const channelData = await channelResponse.json();
+        const likedPlaylistId = channelData.items[0].contentDetails.relatedPlaylists.likes;
+        
+        // Then fetch the videos from that playlist
+        const response = await fetch(`${LIKED_VIDEOS_ENDPOINT}?part=snippet,statistics&maxResults=50&myRating=like`, {
           headers: { Authorization: `Bearer ${result.userToken}` }
         });
         
@@ -67,17 +76,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const data = await response.json();
         console.log('Liked videos fetched:', data);
         
-        // Process videos
+        // Process and store videos
         const videos = data.items.map(video => ({
           id: video.id,
           title: video.snippet.title,
           channelTitle: video.snippet.channelTitle,
           channelId: video.snippet.channelId,
           publishedAt: video.snippet.publishedAt,
-          likedAt: video.snippet.publishedAt, // Use publishedAt as approximate likedAt
-          thumbnail: video.snippet.thumbnails.medium?.url || '',
-          viewCount: video.statistics.viewCount || '0',
-          likeCount: video.statistics.likeCount || '0'
+          likedAt: new Date().toISOString(), // We don't know exactly when it was liked
+          thumbnail: video.snippet.thumbnails.medium.url,
+          viewCount: video.statistics.viewCount,
+          likeCount: video.statistics.likeCount
         }));
         
         // Store the videos locally
@@ -109,60 +118,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
     });
     return true; // Keep the message channel open for the async response
-  }
-
-  if (request.action === 'fetchMoreVideos') {
-    chrome.storage.local.get(['userToken', 'likedVideos'], async (result) => {
-      if (!result.userToken) {
-        sendResponse({ success: false, error: 'Not authenticated' });
-        return;
-      }
-
-      try {
-        // Fetch more videos with the pageToken
-        const response = await fetch(`${LIKED_VIDEOS_ENDPOINT}?part=snippet,statistics&maxResults=100&myRating=like&pageToken=${request.pageToken}`, {
-          headers: { Authorization: `Bearer ${result.userToken}` }
-        });
-        
-        if (!response.ok) throw new Error('Failed to fetch more videos');
-        
-        const data = await response.json();
-        
-        // Process videos
-        const newVideos = data.items.map(video => ({
-          id: video.id,
-          title: video.snippet.title,
-          channelTitle: video.snippet.channelTitle,
-          channelId: video.snippet.channelId,
-          publishedAt: video.snippet.publishedAt,
-          likedAt: video.snippet.publishedAt, // Use publishedAt as approximate likedAt
-          thumbnail: video.snippet.thumbnails.medium?.url || '',
-          viewCount: video.statistics.viewCount || '0',
-          likeCount: video.statistics.likeCount || '0'
-        }));
-        
-        // Combine with existing videos
-        const allVideos = [...(result.likedVideos || []), ...newVideos];
-        
-        // Update local storage
-        chrome.storage.local.set({
-          likedVideos: allVideos,
-          nextPageToken: data.nextPageToken || null,
-          totalResults: data.pageInfo?.totalResults || allVideos.length
-        });
-        
-        sendResponse({
-          success: true,
-          videos: newVideos,
-          nextPageToken: data.nextPageToken,
-          totalResults: data.pageInfo?.totalResults
-        });
-      } catch (error) {
-        console.error('Error fetching more videos:', error);
-        sendResponse({ success: false, error: error.message });
-      }
-    });
-    return true;
   }
 
   if (request.action === 'openDashboard') {
@@ -226,53 +181,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
     });
     return true; // Keep the message channel open for the async response
-  }
-  
-  if (request.action === 'fetchSubscriptions') {
-    chrome.storage.local.get('userToken', async (result) => {
-      if (!result.userToken) {
-        sendResponse({ success: false, error: 'Not authenticated' });
-        return;
-      }
-
-      try {
-        // Fetch user's subscriptions
-        const response = await fetch(`${SUBSCRIPTIONS_ENDPOINT}?part=snippet&mine=true&maxResults=50`, {
-          headers: { Authorization: `Bearer ${result.userToken}` }
-        });
-        
-        if (!response.ok) throw new Error('Failed to fetch subscriptions');
-        
-        const data = await response.json();
-        
-        // Process subscriptions
-        const subscriptions = data.items.map(item => ({
-          id: item.id,
-          channelId: item.snippet.resourceId.channelId,
-          title: item.snippet.title,
-          description: item.snippet.description,
-          thumbnail: item.snippet.thumbnails.default?.url || '',
-          publishedAt: item.snippet.publishedAt
-        }));
-        
-        // Store subscriptions locally
-        chrome.storage.local.set({
-          subscriptions: subscriptions,
-          subscriptionsNextPageToken: data.nextPageToken || null,
-          totalSubscriptions: data.pageInfo?.totalResults || subscriptions.length
-        });
-        
-        sendResponse({
-          success: true,
-          count: subscriptions.length,
-          openDashboard: false // We're not opening a separate dashboard yet
-        });
-      } catch (error) {
-        console.error('Error fetching subscriptions:', error);
-        sendResponse({ success: false, error: error.message });
-      }
-    });
-    return true;
   }
 });
 

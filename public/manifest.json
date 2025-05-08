@@ -31,16 +31,13 @@
   "permissions": [
     "storage",
     "identity",
-    "tabs",
-    "downloads"
+    "tabs"
   ],
   "oauth2": {
     "client_id": "304162096302-c470kd77du16s0lrlumobc6s8u6uleng.apps.googleusercontent.com",
     "scopes": [
       "https://www.googleapis.com/auth/youtube.readonly",
-      "https://www.googleapis.com/auth/youtube.force-ssl",
-      "https://www.googleapis.com/auth/userinfo.profile",
-      "https://www.googleapis.com/auth/userinfo.email"
+      "https://www.googleapis.com/auth/youtube.force-ssl"
     ]
   },
   "web_accessible_resources": [

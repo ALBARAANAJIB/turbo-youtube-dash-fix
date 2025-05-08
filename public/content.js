@@ -22,9 +22,9 @@ function showToast(message, count) {
     position: fixed;
     bottom: 20px;
     right: 20px;
-    background-color: rgba(0, 0, 0, 0.8);
+    background-color: #1A1F2C;
     color: white;
-    padding: 16px;
+    padding: 12px 15px;
     border-radius: 8px;
     z-index: 9999;
     display: flex;
@@ -44,8 +44,8 @@ function showToast(message, count) {
   // Add message text
   const messageText = document.createElement('div');
   messageText.innerHTML = `
-    <div style="font-weight: 500; font-size: 15px;">${message}</div>
-    <div style="font-size: 13px; color: #ccc; margin-top: 4px;">
+    <div style="font-weight: 500;">${message}</div>
+    <div style="font-size: 12px; color: #ccc; margin-top: 4px;">
       ${count} videos fetched. View them in your dashboard.
     </div>
   `;
@@ -59,23 +59,13 @@ function showToast(message, count) {
     margin-left: 15px;
     text-decoration: none;
     font-weight: 500;
-    background-color: #FF0000;
+    background-color: #8B5CF6;
     border: none;
     border-radius: 4px;
-    padding: 8px 16px;
-    font-size: 13px;
+    padding: 6px 12px;
+    font-size: 12px;
     cursor: pointer;
-    transition: background-color 0.2s;
   `;
-  
-  dashboardBtn.addEventListener('mouseenter', () => {
-    dashboardBtn.style.backgroundColor = '#CC0000';
-  });
-  
-  dashboardBtn.addEventListener('mouseleave', () => {
-    dashboardBtn.style.backgroundColor = '#FF0000';
-  });
-  
   dashboardBtn.addEventListener('click', (e) => {
     e.preventDefault();
     chrome.runtime.sendMessage({ action: 'openDashboard' });
@@ -133,7 +123,7 @@ function injectFetchButton() {
   
   // Check if we're on the liked videos page or any page with a playlist header
   const isLikedVideosPage = window.location.href.includes('playlist?list=LL') || 
-                          document.querySelector('ytd-playlist-header-renderer');
+                            document.querySelector('ytd-playlist-header-renderer');
   
   if (!isLikedVideosPage) return;
   
@@ -146,10 +136,10 @@ function injectFetchButton() {
   fetchButton.id = 'youtube-enhancer-fetch-button';
   fetchButton.textContent = 'Fetch My Liked Videos';
   fetchButton.style.cssText = `
-    background-color: rgba(0, 0, 0, 0.1);
+    background-color: #673AB7;
     color: white;
     border: none;
-    border-radius: 18px;
+    border-radius: 4px;
     padding: 8px 16px;
     font-size: 14px;
     font-weight: 500;
@@ -160,18 +150,15 @@ function injectFetchButton() {
     justify-content: center;
     font-family: Roboto, Arial, sans-serif;
     transition: background-color 0.2s;
-    backdrop-filter: blur(5px);
-    -webkit-backdrop-filter: blur(5px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   `;
   
   // Add hover effect
   fetchButton.addEventListener('mouseenter', () => {
-    fetchButton.style.backgroundColor = 'rgba(0, 0, 0, 0.2)';
+    fetchButton.style.backgroundColor = '#5E35B1';
   });
   
   fetchButton.addEventListener('mouseleave', () => {
-    fetchButton.style.backgroundColor = 'rgba(0, 0, 0, 0.1)';
+    fetchButton.style.backgroundColor = '#673AB7';
   });
   
   // Add click event
@@ -203,18 +190,7 @@ function injectFetchButton() {
   
   // Find a good place to insert the button
   const insertButton = () => {
-    // Try to find elements near the Play All and Shuffle buttons
-    const playAllButton = document.querySelector('ytd-button-renderer[id="play-button"]');
-    const shuffleButton = document.querySelector('ytd-button-renderer[id="shuffle-button"]');
-    const actionsArea = playAllButton?.closest('div#top-level-buttons-computed') || 
-                     shuffleButton?.closest('div#top-level-buttons-computed');
-    
-    if (actionsArea) {
-      actionsArea.appendChild(fetchButton);
-      return true;
-    }
-    
-    // Try other selectors as fallback
+    // Try multiple selectors to find a good insertion point
     const selectors = [
       'ytd-playlist-header-renderer #top-level-buttons-computed',
       'ytd-playlist-sidebar-renderer',
@@ -227,9 +203,9 @@ function injectFetchButton() {
     for (const selector of selectors) {
       const element = document.querySelector(selector);
       if (element) {
-        // Insert after the first child or append if no children
+        // Insert before the first child or append if no children
         if (element.firstChild) {
-          element.appendChild(fetchButton);
+          element.insertBefore(fetchButton, element.firstChild);
         } else {
           element.appendChild(fetchButton);
         }
@@ -303,50 +279,4 @@ document.addEventListener('visibilitychange', () => {
 
 // Re-check for the button periodically to ensure it's still there
 // This helps if YouTube's UI changes or elements get removed
-setInterval(injectFetchButton, 5000);
-
-// Specifically watch for changes to the playlist options that show/hide unavailable videos
-function watchForPlaylistChanges() {
-  const observer = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-      if (mutation.type === 'childList' || mutation.type === 'attributes') {
-        setTimeout(injectFetchButton, 500);
-      }
-    }
-  });
-  
-  // Try to find the container that holds the menu options
-  const setupObserver = () => {
-    const menuContainer = document.querySelector('ytd-playlist-header-renderer tp-yt-paper-listbox');
-    if (menuContainer) {
-      observer.observe(menuContainer, {
-        childList: true,
-        subtree: true,
-        attributes: true
-      });
-      return true;
-    }
-    return false;
-  };
-  
-  // Try immediately
-  if (!setupObserver()) {
-    // If not found, wait for changes to the DOM
-    const bodyObserver = new MutationObserver(() => {
-      if (setupObserver()) {
-        bodyObserver.disconnect();
-      }
-    });
-    
-    bodyObserver.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
-    
-    // Stop looking after 30 seconds to prevent memory leaks
-    setTimeout(() => bodyObserver.disconnect(), 30000);
-  }
-}
-
-// Start watching for playlist changes
-watchForPlaylistChanges();
+setInterval(injectFetchButton, 10000);
