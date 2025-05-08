@@ -5,7 +5,8 @@ const REDIRECT_URL = chrome.identity.getRedirectURL();
 const SCOPES = [
   'https://www.googleapis.com/auth/youtube.readonly',
   'https://www.googleapis.com/auth/youtube.force-ssl',
-  'https://www.googleapis.com/auth/userinfo.profile'
+  'https://www.googleapis.com/auth/userinfo.profile',
+  'https://www.googleapis.com/auth/userinfo.email'
 ];
 
 // YouTube API endpoints
@@ -17,6 +18,8 @@ const CHANNELS_ENDPOINT = `${API_BASE}/channels`;
 
 // Handle messages from popup.js and content.js
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  console.log('Received message:', request);
+  
   if (request.action === 'authenticate') {
     authenticate()
       .then(token => getUserInfo(token))
@@ -30,8 +33,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       });
     return true; // Keep the message channel open for the async response
   }
+  
+  if (request.action === 'checkAuth') {
+    chrome.storage.local.get('userToken', (result) => {
+      if (result.userToken) {
+        console.log('User is authenticated');
+        sendResponse({ authenticated: true });
+      } else {
+        console.log('User is not authenticated');
+        sendResponse({ authenticated: false });
+      }
+    });
+    return true; // Keep the message channel open for the async response
+  }
 
-  if (request.action === 'fetchLikedVideos') {
+  if (request.action === 'fetchLikedVideos' || request.action === 'getLikedVideos') {
     chrome.storage.local.get('userToken', async (result) => {
       if (!result.userToken) {
         sendResponse({ success: false, error: 'Not authenticated' });
@@ -39,6 +55,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
 
       try {
+        console.log('Fetching liked videos...');
         // First get the user's "liked videos" playlist ID
         const channelResponse = await fetch(`${CHANNELS_ENDPOINT}?part=contentDetails&mine=true`, {
           headers: { Authorization: `Bearer ${result.userToken}` }
@@ -50,10 +67,36 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const likedPlaylistId = channelData.items[0].contentDetails.relatedPlaylists.likes;
         
         // Then fetch the videos from that playlist
-        const videos = await fetchAllLikedVideos(result.userToken, likedPlaylistId, 50);
+        const response = await fetch(`${LIKED_VIDEOS_ENDPOINT}?part=snippet,statistics&maxResults=50&myRating=like`, {
+          headers: { Authorization: `Bearer ${result.userToken}` }
+        });
+        
+        if (!response.ok) throw new Error('Failed to fetch liked videos');
+        
+        const data = await response.json();
+        console.log('Liked videos fetched:', data);
+        
+        // Process and store videos
+        const videos = data.items.map(video => ({
+          id: video.id,
+          title: video.snippet.title,
+          channelTitle: video.snippet.channelTitle,
+          channelId: video.snippet.channelId,
+          publishedAt: video.snippet.publishedAt,
+          likedAt: new Date().toISOString(), // We don't know exactly when it was liked
+          thumbnail: video.snippet.thumbnails.medium.url,
+          viewCount: video.statistics.viewCount,
+          likeCount: video.statistics.likeCount
+        }));
         
         // Store the videos locally
-        chrome.storage.local.set({ likedVideos: videos });
+        chrome.storage.local.set({ 
+          likedVideos: videos,
+          nextPageToken: data.nextPageToken || null,
+          totalResults: data.pageInfo?.totalResults || videos.length
+        });
+        
+        console.log('Videos stored in local storage');
         
         // Display a toast notification on YouTube pages
         chrome.tabs.query({ url: '*://*.youtube.com/*' }, (tabs) => {
@@ -61,7 +104,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             tabs.forEach(tab => {
               chrome.tabs.sendMessage(tab.id, { 
                 action: 'showToast', 
-                message: `${videos.length} videos fetched. View them in your dashboard.` 
+                message: 'Videos fetched successfully!',
+                count: videos.length
               });
             });
           }
@@ -74,6 +118,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
     });
     return true; // Keep the message channel open for the async response
+  }
+
+  if (request.action === 'openDashboard') {
+    chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') });
+    return false;
   }
 
   if (request.action === 'exportData') {
@@ -188,70 +237,7 @@ async function getUserInfo(token) {
   }
 }
 
-// Fetch liked videos from YouTube API
-async function fetchAllLikedVideos(token, playlistId, maxResults = 50) {
-  const videos = [];
-  let nextPageToken = null;
-  let totalFetched = 0;
-  
-  do {
-    try {
-      // Build request URL
-      let requestUrl = `${PLAYLIST_ITEMS_ENDPOINT}?part=snippet,contentDetails&maxResults=50&playlistId=${playlistId}`;
-      if (nextPageToken) {
-        requestUrl += `&pageToken=${nextPageToken}`;
-      }
-      
-      // Make the request
-      const response = await fetch(requestUrl, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch playlist items');
-      }
-      
-      const data = await response.json();
-      
-      // Process each video
-      for (const item of data.items) {
-        if (totalFetched >= maxResults) break;
-        
-        // Get additional video details
-        const videoResponse = await fetch(`${LIKED_VIDEOS_ENDPOINT}?part=snippet,statistics&id=${item.contentDetails.videoId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        
-        if (!videoResponse.ok) continue;
-        
-        const videoData = await videoResponse.json();
-        
-        if (videoData.items && videoData.items.length > 0) {
-          const video = videoData.items[0];
-          videos.push({
-            id: video.id,
-            title: video.snippet.title,
-            channelTitle: video.snippet.channelTitle,
-            channelId: video.snippet.channelId,
-            publishedAt: video.snippet.publishedAt,
-            likedAt: item.snippet.publishedAt, // When it was added to likes
-            thumbnail: video.snippet.thumbnails.medium.url,
-            viewCount: video.statistics.viewCount,
-            likeCount: video.statistics.likeCount
-          });
-          
-          totalFetched++;
-        }
-      }
-      
-      // Check if there are more pages
-      nextPageToken = data.nextPageToken;
-      
-    } catch (error) {
-      console.error('Error fetching videos:', error);
-      break;
-    }
-  } while (nextPageToken && totalFetched < maxResults);
-  
-  return videos;
-}
+// Open dashboard when extension icon is clicked
+chrome.action.onClicked.addListener(() => {
+  chrome.tabs.create({ url: chrome.runtime.getURL('popup.html') });
+});

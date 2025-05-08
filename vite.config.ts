@@ -27,14 +27,7 @@ export default defineConfig({
         index: 'index.html',
         popup: 'public/popup.html',
         dashboard: 'public/dashboard.html',
-        background: 'public/background.js',
-        content: 'public/content.js'
       },
-      output: {
-        entryFileNames: '[name].js',
-        chunkFileNames: '[name].js',
-        assetFileNames: '[name].[ext]'
-      }
     }
   }
 })

@@ -36,20 +36,104 @@ document.addEventListener('DOMContentLoaded', () => {
   function init() {
     // Load user info
     chrome.storage.local.get('userInfo', (result) => {
-      if (result.userInfo && result.userInfo.email) {
-        userEmail.textContent = result.userInfo.email;
-        userInitial.textContent = result.userInfo.email.charAt(0).toUpperCase();
+      if (result.userInfo) {
+        if (result.userInfo.email) {
+          userEmail.textContent = result.userInfo.email;
+          userInitial.textContent = result.userInfo.email.charAt(0).toUpperCase();
+        } else if (result.userInfo.name) {
+          userEmail.textContent = result.userInfo.name;
+          userInitial.textContent = result.userInfo.name.charAt(0).toUpperCase();
+        } else {
+          // If no email or name, show "Welcome back" message
+          userEmail.textContent = "Welcome back!";
+          userInitial.textContent = "👋";
+        }
+      } else {
+        // User info not found
+        userEmail.textContent = "Welcome to Dashboard";
+        userInitial.textContent = "👋";
       }
     });
     
     // Load videos
-    chrome.storage.local.get('likedVideos', (result) => {
+    chrome.storage.local.get(['likedVideos', 'nextPageToken', 'totalResults'], (result) => {
       if (result.likedVideos && result.likedVideos.length > 0) {
         videos = result.likedVideos;
         renderVideos();
+        
+        // Show total count and pagination info if available
+        if (result.totalResults) {
+          const totalCount = document.createElement('div');
+          totalCount.className = 'total-count';
+          totalCount.textContent = `Showing ${videos.length} of ${result.totalResults} videos`;
+          videoList.parentNode.insertBefore(totalCount, videoList);
+          
+          // If there are more videos to load, show a "Load more" button
+          if (result.nextPageToken) {
+            const loadMoreBtn = document.createElement('button');
+            loadMoreBtn.id = 'load-more';
+            loadMoreBtn.className = 'secondary-button';
+            loadMoreBtn.textContent = 'Load More Videos';
+            loadMoreBtn.addEventListener('click', () => loadMoreVideos(result.nextPageToken));
+            
+            // Add after the video list
+            videoList.parentNode.appendChild(loadMoreBtn);
+          }
+        }
       } else {
         loadingElement.style.display = 'none';
         noVideosElement.style.display = 'block';
+      }
+    });
+  }
+  
+  // Function to load more videos using the nextPageToken
+  function loadMoreVideos(pageToken) {
+    const loadMoreBtn = document.getElementById('load-more');
+    if (loadMoreBtn) {
+      loadMoreBtn.disabled = true;
+      loadMoreBtn.textContent = 'Loading...';
+    }
+    
+    chrome.runtime.sendMessage({ 
+      action: 'fetchMoreVideos', 
+      pageToken: pageToken 
+    }, (response) => {
+      if (response && response.success) {
+        // Add the new videos to our array
+        videos = [...videos, ...response.videos];
+        
+        // Update the stored videos
+        chrome.storage.local.set({ 
+          likedVideos: videos,
+          nextPageToken: response.nextPageToken || null
+        });
+        
+        // Re-render with the new videos
+        renderVideos();
+        
+        // Update or remove the load more button
+        if (loadMoreBtn) {
+          if (response.nextPageToken) {
+            loadMoreBtn.disabled = false;
+            loadMoreBtn.textContent = 'Load More Videos';
+            loadMoreBtn.onclick = () => loadMoreVideos(response.nextPageToken);
+          } else {
+            loadMoreBtn.remove();
+          }
+        }
+        
+        // Update the total count display
+        const totalCount = document.querySelector('.total-count');
+        if (totalCount) {
+          totalCount.textContent = `Showing ${videos.length} of ${response.totalResults || videos.length} videos`;
+        }
+      } else {
+        if (loadMoreBtn) {
+          loadMoreBtn.disabled = false;
+          loadMoreBtn.textContent = 'Try Again';
+        }
+        alert('Failed to load more videos. Please try again.');
       }
     });
   }
