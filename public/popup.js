@@ -1,24 +1,22 @@
 
 document.addEventListener('DOMContentLoaded', () => {
-  const loginSection = document.getElementById('login-section');
-  const userSection = document.getElementById('user-section');
   const loginButton = document.getElementById('login-button');
-  const logoutButton = document.getElementById('logout-button');
+  const loginContainer = document.getElementById('login-container');
+  const featuresContainer = document.getElementById('features-container');
   const fetchVideosButton = document.getElementById('fetch-videos');
   const openDashboardButton = document.getElementById('open-dashboard');
   const exportDataButton = document.getElementById('export-data');
-  const generateSummaryButton = document.getElementById('generate-summary');
+  const aiSummaryButton = document.getElementById('ai-summary');
+  const signOutButton = document.getElementById('sign-out');
   const userEmail = document.getElementById('user-email');
   const userInitial = document.getElementById('user-initial');
-  const toast = document.getElementById('toast');
-  const toastMessage = document.getElementById('toast-message');
 
   // Check if user is already authenticated
   chrome.storage.local.get(['userToken', 'userInfo'], (result) => {
     if (result.userToken && result.userInfo) {
       // User is authenticated, show features
-      loginSection.style.display = 'none';
-      userSection.style.display = 'block';
+      loginContainer.style.display = 'none';
+      featuresContainer.style.display = 'block';
       
       // Display user info
       if (result.userInfo.email) {
@@ -30,30 +28,20 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } else {
       // User is not authenticated, show login
-      loginSection.style.display = 'block';
-      userSection.style.display = 'none';
+      loginContainer.style.display = 'block';
+      featuresContainer.style.display = 'none';
     }
   });
 
-  // Show toast message
-  function showToast(message, duration = 3000) {
-    toastMessage.textContent = message;
-    toast.classList.add('show');
-    
-    setTimeout(() => {
-      toast.classList.remove('show');
-    }, duration);
-  }
-
-  // Login with Google
+  // Login with YouTube
   loginButton.addEventListener('click', () => {
     loginButton.disabled = true;
     loginButton.textContent = 'Signing in...';
     
     chrome.runtime.sendMessage({ action: 'authenticate' }, (response) => {
       if (response && response.success) {
-        loginSection.style.display = 'none';
-        userSection.style.display = 'block';
+        loginContainer.style.display = 'none';
+        featuresContainer.style.display = 'block';
         
         // Display user info
         if (response.userInfo && response.userInfo.email) {
@@ -64,9 +52,9 @@ document.addEventListener('DOMContentLoaded', () => {
           userInitial.textContent = response.userInfo.name.charAt(0).toUpperCase();
         }
       } else {
-        showToast('Authentication failed. Please try again.');
+        alert('Authentication failed. Please try again.');
         loginButton.disabled = false;
-        loginButton.textContent = 'Sign in with Google';
+        loginButton.textContent = 'Sign in with YouTube';
       }
     });
   });
@@ -82,9 +70,20 @@ document.addEventListener('DOMContentLoaded', () => {
       fetchVideosButton.textContent = originalText;
       
       if (response && response.success) {
-        showToast(`${response.count} videos fetched successfully!`);
+        // Show a success message in the popup
+        const successMessage = document.createElement('div');
+        successMessage.classList.add('success-message');
+        successMessage.textContent = `${response.count} videos fetched!`;
+        
+        // Insert after the fetch button
+        fetchVideosButton.parentNode.insertBefore(successMessage, fetchVideosButton.nextSibling);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+          successMessage.remove();
+        }, 3000);
       } else {
-        showToast('Failed to fetch videos. Please try again.');
+        alert('Failed to fetch videos. Please try again.');
       }
     });
   });
@@ -93,31 +92,22 @@ document.addEventListener('DOMContentLoaded', () => {
   openDashboardButton.addEventListener('click', () => {
     chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') });
   });
-  
+
   // Export data
   exportDataButton.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ action: 'exportData' }, (response) => {
-      if (response && response.success) {
-        showToast('Data exported successfully!');
-      } else if (response && !response.success) {
-        showToast(response.error || 'Failed to export data. Please try again.');
-      } else {
-        // No response means it's handled by the background script
-      }
-    });
+    chrome.runtime.sendMessage({ action: 'exportData' });
   });
-  
-  // Generate AI summary (placeholder for future functionality)
-  generateSummaryButton.addEventListener('click', () => {
-    showToast('AI Summary feature coming soon!');
+
+  // AI Summary
+  aiSummaryButton.addEventListener('click', () => {
+    chrome.runtime.sendMessage({ action: 'aiSummary' });
   });
 
   // Sign out
-  logoutButton.addEventListener('click', () => {
-    chrome.storage.local.remove(['userToken', 'userInfo', 'likedVideos', 'subscriptions'], () => {
-      loginSection.style.display = 'block';
-      userSection.style.display = 'none';
-      showToast('Signed out successfully');
+  signOutButton.addEventListener('click', () => {
+    chrome.storage.local.remove(['userToken', 'userInfo', 'likedVideos'], () => {
+      loginContainer.style.display = 'block';
+      featuresContainer.style.display = 'none';
     });
   });
 });
