@@ -88,12 +88,19 @@ main {
 }
 
 .dashboard-header {
+  margin-bottom: 24px;
+}
+
+.header-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
-  flex-wrap: wrap;
-  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.header-buttons {
+  display: flex;
+  gap: 12px;
 }
 
 h2 {
@@ -102,17 +109,19 @@ h2 {
   color: #333;
 }
 
-.actions {
+.filters-section {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
+  margin-bottom: 16px;
 }
 
 .search-container input {
   padding: 8px 12px;
   border: 1px solid #ddd;
   border-radius: 4px;
-  width: 240px;
   font-size: 14px;
+  width: 240px;
 }
 
 .filter-container select {
@@ -122,6 +131,54 @@ h2 {
   background-color: #fff;
   font-size: 14px;
   min-width: 150px;
+}
+
+.date-filter-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-input-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.date-input-group label {
+  font-size: 14px;
+  color: #666;
+}
+
+.date-input-group input {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  width: 150px;
+}
+
+.filter-button {
+  padding: 8px 16px;
+  background-color: #f1f1f1;
+  border: none;
+  border-radius: 4px;
+  color: #333;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.filter-button:hover {
+  background-color: #e5e5e5;
+}
+
+.progress-container {
+  margin-top: 12px;
+}
+
+#progress-indicator {
+  font-size: 14px;
+  color: #666;
 }
 
 #loading, #no-videos {
@@ -235,6 +292,33 @@ h2 {
   text-decoration: underline;
 }
 
+.loading-more {
+  text-align: center;
+  padding: 20px;
+  margin-top: 20px;
+  color: #666;
+  font-style: italic;
+  grid-column: 1 / -1;
+}
+
+.error-message {
+  background-color: #ffebee;
+  color: #c62828;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.success-message {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
 #bottom-bar {
   position: fixed;
   bottom: 0;
@@ -333,19 +417,19 @@ h2 {
 }
 
 @media (max-width: 768px) {
-  .dashboard-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  
-  .actions {
-    width: 100%;
+  .filters-section {
     flex-direction: column;
   }
   
   .search-container input,
-  .filter-container select {
+  .filter-container select,
+  .date-input-group input {
     width: 100%;
+  }
+  
+  .date-filter-container {
+    flex-direction: column;
+    align-items: flex-start;
   }
   
   #video-list {
@@ -355,5 +439,10 @@ h2 {
   #bottom-bar {
     flex-direction: column;
     gap: 12px;
+  }
+  
+  .bulk-actions {
+    width: 100%;
+    justify-content: space-between;
   }
 }
