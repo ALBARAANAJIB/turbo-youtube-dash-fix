@@ -5,8 +5,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const loginButton = document.getElementById('login-button');
   const logoutButton = document.getElementById('logout-button');
   const fetchVideosButton = document.getElementById('fetch-videos');
-  const fetchSubscriptionsButton = document.getElementById('fetch-subscriptions');
   const openDashboardButton = document.getElementById('open-dashboard');
+  const exportDataButton = document.getElementById('export-data');
+  const generateSummaryButton = document.getElementById('generate-summary');
   const userEmail = document.getElementById('user-email');
   const userInitial = document.getElementById('user-initial');
   const toast = document.getElementById('toast');
@@ -87,28 +88,28 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
-  
-  // Fetch subscriptions
-  fetchSubscriptionsButton.addEventListener('click', () => {
-    fetchSubscriptionsButton.disabled = true;
-    const originalText = fetchSubscriptionsButton.textContent;
-    fetchSubscriptionsButton.textContent = 'Fetching...';
-    
-    chrome.runtime.sendMessage({ action: 'fetchSubscriptions' }, (response) => {
-      fetchSubscriptionsButton.disabled = false;
-      fetchSubscriptionsButton.textContent = originalText;
-      
-      if (response && response.success) {
-        showToast(`${response.count} subscriptions fetched successfully!`);
-      } else {
-        showToast('Failed to fetch subscriptions. Please try again.');
-      }
-    });
-  });
 
   // Open dashboard
   openDashboardButton.addEventListener('click', () => {
     chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') });
+  });
+  
+  // Export data
+  exportDataButton.addEventListener('click', () => {
+    chrome.runtime.sendMessage({ action: 'exportData' }, (response) => {
+      if (response && response.success) {
+        showToast('Data exported successfully!');
+      } else if (response && !response.success) {
+        showToast(response.error || 'Failed to export data. Please try again.');
+      } else {
+        // No response means it's handled by the background script
+      }
+    });
+  });
+  
+  // Generate AI summary (placeholder for future functionality)
+  generateSummaryButton.addEventListener('click', () => {
+    showToast('AI Summary feature coming soon!');
   });
 
   // Sign out

@@ -21,7 +21,7 @@
 
 body {
   font-family: 'Roboto', Arial, sans-serif;
-  width: 360px;
+  width: 300px;
   margin: 0;
   padding: 0;
   background-color: var(--background);
@@ -47,9 +47,9 @@ body {
 }
 
 .popup-header h1 {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
-  color: var(--primary);
+  color: var(--text-primary);
   margin: 0;
 }
 
@@ -107,7 +107,7 @@ body {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background-color: var(--primary);
+  background-color: var(--accent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -129,19 +129,22 @@ body {
 /* Features grid styles */
 .features-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 16px;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
   margin-bottom: 20px;
 }
 
 .feature-card {
   background-color: var(--background-secondary);
   border-radius: var(--radius);
-  padding: 16px;
+  padding: 12px;
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
   transition: transform 0.2s, box-shadow 0.2s;
   box-shadow: var(--shadow);
+  height: 160px;
 }
 
 .feature-card:hover {
@@ -149,63 +152,71 @@ body {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
+.feature-card.fetch-videos {
+  background-color: var(--accent);
+  color: white;
+}
+
+.feature-card.dashboard {
+  background-color: #f0f0f0;
+}
+
 .feature-icon {
-  background-color: rgba(155, 135, 245, 0.1);
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius);
+  width: 32px;
+  height: 32px;
+  margin-bottom: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: 16px;
-  flex-shrink: 0;
 }
 
 .feature-icon img {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
 }
 
 .feature-content {
   flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .feature-content h2 {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 500;
-  margin-bottom: 6px;
-  color: var(--text-primary);
+  margin-bottom: 4px;
 }
 
 .feature-content p {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-bottom: 12px;
+  font-size: 11px;
+  color: inherit;
+  opacity: 0.85;
+  margin-bottom: auto;
   line-height: 1.4;
 }
 
 .action-button {
-  background-color: var(--primary);
-  color: white;
-  border: none;
+  background-color: transparent;
+  color: inherit;
+  border: 1px solid currentColor;
   padding: 6px 12px;
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
   transition: background-color 0.2s;
   font-weight: 500;
+  margin-top: auto;
+  width: 100%;
+}
+
+.feature-card.fetch-videos .action-button {
+  background-color: white;
+  color: var(--accent);
+  border: none;
 }
 
 .action-button:hover {
-  background-color: var(--primary-hover);
-}
-
-.action-button.secondary {
-  background-color: var(--accent);
-}
-
-.action-button.secondary:hover {
-  background-color: #d3293c;
+  opacity: 0.9;
 }
 
 /* Footer buttons */
