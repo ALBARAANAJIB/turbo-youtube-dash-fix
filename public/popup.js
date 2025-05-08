@@ -1,22 +1,23 @@
 
 document.addEventListener('DOMContentLoaded', () => {
+  const loginSection = document.getElementById('login-section');
+  const userSection = document.getElementById('user-section');
   const loginButton = document.getElementById('login-button');
-  const loginContainer = document.getElementById('login-container');
-  const featuresContainer = document.getElementById('features-container');
+  const logoutButton = document.getElementById('logout-button');
   const fetchVideosButton = document.getElementById('fetch-videos');
   const fetchSubscriptionsButton = document.getElementById('fetch-subscriptions');
   const openDashboardButton = document.getElementById('open-dashboard');
-  const exportDataButton = document.getElementById('export-data');
-  const signOutButton = document.getElementById('sign-out');
   const userEmail = document.getElementById('user-email');
   const userInitial = document.getElementById('user-initial');
+  const toast = document.getElementById('toast');
+  const toastMessage = document.getElementById('toast-message');
 
   // Check if user is already authenticated
   chrome.storage.local.get(['userToken', 'userInfo'], (result) => {
     if (result.userToken && result.userInfo) {
       // User is authenticated, show features
-      loginContainer.style.display = 'none';
-      featuresContainer.style.display = 'block';
+      loginSection.style.display = 'none';
+      userSection.style.display = 'block';
       
       // Display user info
       if (result.userInfo.email) {
@@ -28,20 +29,30 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } else {
       // User is not authenticated, show login
-      loginContainer.style.display = 'block';
-      featuresContainer.style.display = 'none';
+      loginSection.style.display = 'block';
+      userSection.style.display = 'none';
     }
   });
 
-  // Login with YouTube
+  // Show toast message
+  function showToast(message, duration = 3000) {
+    toastMessage.textContent = message;
+    toast.classList.add('show');
+    
+    setTimeout(() => {
+      toast.classList.remove('show');
+    }, duration);
+  }
+
+  // Login with Google
   loginButton.addEventListener('click', () => {
     loginButton.disabled = true;
     loginButton.textContent = 'Signing in...';
     
     chrome.runtime.sendMessage({ action: 'authenticate' }, (response) => {
       if (response && response.success) {
-        loginContainer.style.display = 'none';
-        featuresContainer.style.display = 'block';
+        loginSection.style.display = 'none';
+        userSection.style.display = 'block';
         
         // Display user info
         if (response.userInfo && response.userInfo.email) {
@@ -52,9 +63,9 @@ document.addEventListener('DOMContentLoaded', () => {
           userInitial.textContent = response.userInfo.name.charAt(0).toUpperCase();
         }
       } else {
-        alert('Authentication failed. Please try again.');
+        showToast('Authentication failed. Please try again.');
         loginButton.disabled = false;
-        loginButton.textContent = 'Sign in with YouTube';
+        loginButton.textContent = 'Sign in with Google';
       }
     });
   });
@@ -70,20 +81,9 @@ document.addEventListener('DOMContentLoaded', () => {
       fetchVideosButton.textContent = originalText;
       
       if (response && response.success) {
-        // Show a success message in the popup
-        const successMessage = document.createElement('div');
-        successMessage.classList.add('success-message');
-        successMessage.textContent = `${response.count} videos fetched!`;
-        
-        // Insert after the fetch button
-        fetchVideosButton.parentNode.insertBefore(successMessage, fetchVideosButton.nextSibling);
-        
-        // Remove after 3 seconds
-        setTimeout(() => {
-          successMessage.remove();
-        }, 3000);
+        showToast(`${response.count} videos fetched successfully!`);
       } else {
-        alert('Failed to fetch videos. Please try again.');
+        showToast('Failed to fetch videos. Please try again.');
       }
     });
   });
@@ -99,20 +99,9 @@ document.addEventListener('DOMContentLoaded', () => {
       fetchSubscriptionsButton.textContent = originalText;
       
       if (response && response.success) {
-        // Show a success message in the popup
-        const successMessage = document.createElement('div');
-        successMessage.classList.add('success-message');
-        successMessage.textContent = `${response.count} subscriptions fetched!`;
-        
-        // Insert after the fetch button
-        fetchSubscriptionsButton.parentNode.insertBefore(successMessage, fetchSubscriptionsButton.nextSibling);
-        
-        // Remove after 3 seconds
-        setTimeout(() => {
-          successMessage.remove();
-        }, 3000);
+        showToast(`${response.count} subscriptions fetched successfully!`);
       } else {
-        alert('Failed to fetch subscriptions. Please try again.');
+        showToast('Failed to fetch subscriptions. Please try again.');
       }
     });
   });
@@ -122,16 +111,12 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') });
   });
 
-  // Export data
-  exportDataButton.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ action: 'exportData' });
-  });
-
   // Sign out
-  signOutButton.addEventListener('click', () => {
+  logoutButton.addEventListener('click', () => {
     chrome.storage.local.remove(['userToken', 'userInfo', 'likedVideos', 'subscriptions'], () => {
-      loginContainer.style.display = 'block';
-      featuresContainer.style.display = 'none';
+      loginSection.style.display = 'block';
+      userSection.style.display = 'none';
+      showToast('Signed out successfully');
     });
   });
 });
