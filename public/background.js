@@ -140,6 +140,89 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true; // Keep the message channel open for the async response
   }
 
+  // Add proper handler for fetchMoreVideos action
+  if (request.action === 'fetchMoreVideos') {
+    chrome.storage.local.get(['userToken', 'likedVideos'], async (result) => {
+      if (!result.userToken) {
+        sendResponse({ success: false, error: 'Not authenticated' });
+        return;
+      }
+
+      try {
+        console.log('Fetching more liked videos with page token:', request.pageToken);
+        
+        // Get the user's "liked videos" playlist ID
+        const channelResponse = await fetch(`${CHANNELS_ENDPOINT}?part=contentDetails&mine=true`, {
+          headers: { Authorization: `Bearer ${result.userToken}` }
+        });
+        
+        if (!channelResponse.ok) throw new Error('Failed to fetch channel data');
+        
+        const channelData = await channelResponse.json();
+        const likedPlaylistId = channelData.items[0].contentDetails.relatedPlaylists.likes;
+        
+        // Fetch the next page of videos using the pageToken
+        const playlistResponse = await fetch(
+          `${PLAYLIST_ITEMS_ENDPOINT}?part=snippet,contentDetails&maxResults=50&playlistId=${likedPlaylistId}&pageToken=${request.pageToken}`, 
+          {
+            headers: { Authorization: `Bearer ${result.userToken}` }
+          }
+        );
+        
+        if (!playlistResponse.ok) throw new Error('Failed to fetch playlist items');
+        
+        const playlistData = await playlistResponse.json();
+        console.log('Next page of playlist items fetched:', playlistData);
+        
+        // Get video details for the playlist items
+        const videoIds = playlistData.items.map(item => item.contentDetails.videoId).join(',');
+        
+        const videosResponse = await fetch(`${LIKED_VIDEOS_ENDPOINT}?part=snippet,statistics&id=${videoIds}`, {
+          headers: { Authorization: `Bearer ${result.userToken}` }
+        });
+        
+        if (!videosResponse.ok) throw new Error('Failed to fetch video details');
+        
+        const videosData = await videosResponse.json();
+        
+        // Map playlist items to our video objects with correct liked dates
+        const newVideos = playlistData.items.map(item => {
+          const videoId = item.contentDetails.videoId;
+          const videoDetails = videosData.items.find(v => v.id === videoId);
+          
+          if (!videoDetails) return null;
+          
+          return {
+            id: videoId,
+            title: videoDetails.snippet.title,
+            channelTitle: videoDetails.snippet.channelTitle,
+            channelId: videoDetails.snippet.channelId,
+            publishedAt: videoDetails.snippet.publishedAt,
+            likedAt: item.snippet.publishedAt,
+            thumbnail: videoDetails.snippet.thumbnails.medium?.url || '',
+            viewCount: videoDetails.statistics?.viewCount || '0',
+            likeCount: videoDetails.statistics?.likeCount || '0'
+          };
+        }).filter(Boolean);
+        
+        console.log(`Fetched ${newVideos.length} additional videos`);
+        
+        // Send response before updating storage to prevent timeout issues
+        sendResponse({ 
+          success: true, 
+          videos: newVideos,
+          nextPageToken: playlistData.nextPageToken || null,
+          totalResults: playlistData.pageInfo?.totalResults || 0
+        });
+        
+      } catch (error) {
+        console.error('Error fetching more videos:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    });
+    return true; // Keep the message channel open for the async response
+  }
+
   if (request.action === 'openDashboard') {
     chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') });
     return false;

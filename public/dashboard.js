@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   let videos = [];
   let selectedVideos = new Set();
+  let isLoadingMore = false;
   
   // Initialize the dashboard
   init();
@@ -70,14 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
           
           // If there are more videos to load, show a "Load more" button
           if (result.nextPageToken) {
-            const loadMoreBtn = document.createElement('button');
-            loadMoreBtn.id = 'load-more';
-            loadMoreBtn.className = 'secondary-button';
-            loadMoreBtn.textContent = 'Load More Videos';
-            loadMoreBtn.addEventListener('click', () => loadMoreVideos(result.nextPageToken));
-            
-            // Add after the video list
-            videoList.parentNode.appendChild(loadMoreBtn);
+            addLoadMoreButton(result.nextPageToken);
           }
         }
       } else {
@@ -87,23 +81,50 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   
+  // Function to add a load more button
+  function addLoadMoreButton(pageToken) {
+    // Remove existing button if any
+    const existingBtn = document.getElementById('load-more');
+    if (existingBtn) {
+      existingBtn.remove();
+    }
+    
+    // Create new button
+    const loadMoreBtn = document.createElement('button');
+    loadMoreBtn.id = 'load-more';
+    loadMoreBtn.className = 'secondary-button';
+    loadMoreBtn.textContent = 'Load More Videos';
+    loadMoreBtn.addEventListener('click', () => loadMoreVideos(pageToken));
+    
+    // Add after the video list
+    videoList.parentNode.appendChild(loadMoreBtn);
+  }
+  
   // Function to load more videos using the nextPageToken
   function loadMoreVideos(pageToken) {
+    if (isLoadingMore) return;
+    
     const loadMoreBtn = document.getElementById('load-more');
     if (loadMoreBtn) {
       loadMoreBtn.disabled = true;
       loadMoreBtn.textContent = 'Loading...';
     }
     
+    isLoadingMore = true;
+    
     chrome.runtime.sendMessage({ 
       action: 'fetchMoreVideos', 
       pageToken: pageToken 
     }, (response) => {
+      isLoadingMore = false;
+      
       if (response && response.success) {
+        console.log("Successfully loaded more videos:", response);
+        
         // Add the new videos to our array
         videos = [...videos, ...response.videos];
         
-        // Update the stored videos
+        // Update the stored videos in local storage
         chrome.storage.local.set({ 
           likedVideos: videos,
           nextPageToken: response.nextPageToken || null
@@ -113,14 +134,10 @@ document.addEventListener('DOMContentLoaded', () => {
         renderVideos();
         
         // Update or remove the load more button
-        if (loadMoreBtn) {
-          if (response.nextPageToken) {
-            loadMoreBtn.disabled = false;
-            loadMoreBtn.textContent = 'Load More Videos';
-            loadMoreBtn.onclick = () => loadMoreVideos(response.nextPageToken);
-          } else {
-            loadMoreBtn.remove();
-          }
+        if (response.nextPageToken) {
+          addLoadMoreButton(response.nextPageToken);
+        } else if (loadMoreBtn) {
+          loadMoreBtn.remove();
         }
         
         // Update the total count display
@@ -129,11 +146,38 @@ document.addEventListener('DOMContentLoaded', () => {
           totalCount.textContent = `Showing ${videos.length} of ${response.totalResults || videos.length} videos`;
         }
       } else {
+        console.error("Failed to load more videos:", response?.error || "Unknown error");
         if (loadMoreBtn) {
           loadMoreBtn.disabled = false;
           loadMoreBtn.textContent = 'Try Again';
         }
-        alert('Failed to load more videos. Please try again.');
+        // Show error message
+        const errorMessage = document.createElement('div');
+        errorMessage.className = 'error-message';
+        errorMessage.textContent = response?.error || 'Failed to load more videos. Please try again.';
+        errorMessage.style.color = '#ea384c';
+        errorMessage.style.marginTop = '16px';
+        errorMessage.style.textAlign = 'center';
+        
+        // Remove existing error message if any
+        const existingError = document.querySelector('.error-message');
+        if (existingError) {
+          existingError.remove();
+        }
+        
+        // Add error message after load more button
+        if (loadMoreBtn) {
+          loadMoreBtn.parentNode.insertBefore(errorMessage, loadMoreBtn.nextSibling);
+        } else {
+          videoList.parentNode.appendChild(errorMessage);
+        }
+        
+        // Make error message disappear after 5 seconds
+        setTimeout(() => {
+          if (errorMessage.parentNode) {
+            errorMessage.remove();
+          }
+        }, 5000);
       }
     });
   }
