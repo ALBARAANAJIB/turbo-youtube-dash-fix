@@ -22,7 +22,7 @@ function showToast(message, count) {
     position: fixed;
     bottom: 20px;
     right: 20px;
-    background-color: #1A1F2C;
+    background-color: rgba(26, 31, 44, 0.8);
     color: white;
     padding: 12px 15px;
     border-radius: 8px;
@@ -33,6 +33,8 @@ function showToast(message, count) {
     font-family: Roboto, Arial, sans-serif;
     max-width: 400px;
     animation: fadeIn 0.3s, fadeOut 0.3s 4.7s;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.1);
   `;
   
   // Add check icon
@@ -59,7 +61,7 @@ function showToast(message, count) {
     margin-left: 15px;
     text-decoration: none;
     font-weight: 500;
-    background-color: #8B5CF6;
+    background-color: #ea384c;
     border: none;
     border-radius: 4px;
     padding: 6px 12px;
@@ -136,11 +138,11 @@ function injectFetchButton() {
   fetchButton.id = 'youtube-enhancer-fetch-button';
   fetchButton.textContent = 'Fetch My Liked Videos';
   fetchButton.style.cssText = `
-    background-color: #673AB7;
+    background-color: rgba(26, 26, 26, 0.6);
     color: white;
     border: none;
     border-radius: 4px;
-    padding: 8px 16px;
+    padding: 10px 18px;
     font-size: 14px;
     font-weight: 500;
     margin: 10px;
@@ -150,15 +152,19 @@ function injectFetchButton() {
     justify-content: center;
     font-family: Roboto, Arial, sans-serif;
     transition: background-color 0.2s;
+    backdrop-filter: blur(4px);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    border: 1px solid rgba(255,255,255,0.1);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
   `;
   
   // Add hover effect
   fetchButton.addEventListener('mouseenter', () => {
-    fetchButton.style.backgroundColor = '#5E35B1';
+    fetchButton.style.backgroundColor = 'rgba(234, 56, 76, 0.8)';
   });
   
   fetchButton.addEventListener('mouseleave', () => {
-    fetchButton.style.backgroundColor = '#673AB7';
+    fetchButton.style.backgroundColor = 'rgba(26, 26, 26, 0.6)';
   });
   
   // Add click event

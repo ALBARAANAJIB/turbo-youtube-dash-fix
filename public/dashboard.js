@@ -149,7 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Get filter value
     const filterValue = filterSelect.value;
     
-    // Filter and sort videos
+    // Filter videos
     let filteredVideos = videos.filter(video => 
       video.title.toLowerCase().includes(searchTerm) || 
       video.channelTitle.toLowerCase().includes(searchTerm)
@@ -158,12 +158,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // Apply sorting based on filter
     switch (filterValue) {
       case 'recent':
+        // Sort by likedAt date, newest first
         filteredVideos.sort((a, b) => new Date(b.likedAt) - new Date(a.likedAt));
         break;
       case 'oldest':
+        // Sort by likedAt date, oldest first
         filteredVideos.sort((a, b) => new Date(a.likedAt) - new Date(b.likedAt));
         break;
       case 'popular':
+        // Sort by view count
         filteredVideos.sort((a, b) => parseInt(b.viewCount) - parseInt(a.viewCount));
         break;
       default:

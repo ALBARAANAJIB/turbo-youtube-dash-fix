@@ -66,37 +66,57 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const channelData = await channelResponse.json();
         const likedPlaylistId = channelData.items[0].contentDetails.relatedPlaylists.likes;
         
-        // Then fetch the videos from that playlist
-        const response = await fetch(`${LIKED_VIDEOS_ENDPOINT}?part=snippet,statistics&maxResults=50&myRating=like`, {
+        // Fetch the videos from the liked playlist instead of myRating=like to get proper order
+        const playlistResponse = await fetch(`${PLAYLIST_ITEMS_ENDPOINT}?part=snippet,contentDetails&maxResults=50&playlistId=${likedPlaylistId}`, {
           headers: { Authorization: `Bearer ${result.userToken}` }
         });
         
-        if (!response.ok) throw new Error('Failed to fetch liked videos');
+        if (!playlistResponse.ok) throw new Error('Failed to fetch playlist items');
         
-        const data = await response.json();
-        console.log('Liked videos fetched:', data);
+        const playlistData = await playlistResponse.json();
+        console.log('Playlist items fetched:', playlistData);
         
-        // Process and store videos
-        const videos = data.items.map(video => ({
-          id: video.id,
-          title: video.snippet.title,
-          channelTitle: video.snippet.channelTitle,
-          channelId: video.snippet.channelId,
-          publishedAt: video.snippet.publishedAt,
-          likedAt: new Date().toISOString(), // We don't know exactly when it was liked
-          thumbnail: video.snippet.thumbnails.medium.url,
-          viewCount: video.statistics.viewCount,
-          likeCount: video.statistics.likeCount
-        }));
+        // Get video details (including statistics) for the playlist items
+        const videoIds = playlistData.items.map(item => item.contentDetails.videoId).join(',');
+        
+        const videosResponse = await fetch(`${LIKED_VIDEOS_ENDPOINT}?part=snippet,statistics&id=${videoIds}`, {
+          headers: { Authorization: `Bearer ${result.userToken}` }
+        });
+        
+        if (!videosResponse.ok) throw new Error('Failed to fetch video details');
+        
+        const videosData = await videosResponse.json();
+        console.log('Video details fetched:', videosData);
+        
+        // Map playlist items to our video objects with correct liked dates
+        const videos = playlistData.items.map(item => {
+          const videoId = item.contentDetails.videoId;
+          const videoDetails = videosData.items.find(v => v.id === videoId);
+          
+          if (!videoDetails) return null;
+          
+          return {
+            id: videoId,
+            title: videoDetails.snippet.title,
+            channelTitle: videoDetails.snippet.channelTitle,
+            channelId: videoDetails.snippet.channelId,
+            publishedAt: videoDetails.snippet.publishedAt,
+            // Use the date from the playlist item for when it was liked
+            likedAt: item.snippet.publishedAt,
+            thumbnail: videoDetails.snippet.thumbnails.medium?.url || '',
+            viewCount: videoDetails.statistics?.viewCount || '0',
+            likeCount: videoDetails.statistics?.likeCount || '0'
+          };
+        }).filter(Boolean); // Remove any nulls
         
         // Store the videos locally
         chrome.storage.local.set({ 
           likedVideos: videos,
-          nextPageToken: data.nextPageToken || null,
-          totalResults: data.pageInfo?.totalResults || videos.length
+          nextPageToken: playlistData.nextPageToken || null,
+          totalResults: playlistData.pageInfo?.totalResults || videos.length
         });
         
-        console.log('Videos stored in local storage');
+        console.log('Videos stored in local storage with correct liked dates');
         
         // Display a toast notification on YouTube pages
         chrome.tabs.query({ url: '*://*.youtube.com/*' }, (tabs) => {
