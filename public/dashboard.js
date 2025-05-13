@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const confirmDeleteButton = document.getElementById('confirm-delete');
   const userEmail = document.getElementById('user-email');
   const userInitial = document.getElementById('user-initial');
+  const loadMoreContainer = document.querySelector('.load-more-container');
   
   let videos = [];
   let selectedVideos = new Set();
@@ -96,8 +97,9 @@ document.addEventListener('DOMContentLoaded', () => {
     loadMoreBtn.textContent = 'Load More Videos';
     loadMoreBtn.addEventListener('click', () => loadMoreVideos(pageToken));
     
-    // Add after the video list
-    videoList.parentNode.appendChild(loadMoreBtn);
+    // Add to the dedicated container
+    loadMoreContainer.innerHTML = '';
+    loadMoreContainer.appendChild(loadMoreBtn);
   }
   
   // Function to load more videos using the nextPageToken
@@ -166,11 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Add error message after load more button
-        if (loadMoreBtn) {
-          loadMoreBtn.parentNode.insertBefore(errorMessage, loadMoreBtn.nextSibling);
-        } else {
-          videoList.parentNode.appendChild(errorMessage);
-        }
+        loadMoreContainer.appendChild(errorMessage);
         
         // Make error message disappear after 5 seconds
         setTimeout(() => {

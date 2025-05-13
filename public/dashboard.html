@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>YouTube Enhancer Dashboard</title>
   <link rel="stylesheet" href="dashboard.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
   <div class="dashboard-container">
@@ -48,16 +49,22 @@
         <div id="video-list"></div>
       </div>
 
-      <div id="bottom-bar">
-        <div class="selection-info">
-          <span id="selection-count">0 videos selected</span>
-        </div>
-        <div class="bulk-actions">
-          <button id="select-all" class="secondary-button">Select All</button>
-          <button id="delete-selected" class="danger-button" disabled>Delete Selected</button>
-        </div>
+      <!-- Load more button position here -->
+      <div class="load-more-container">
+        <!-- Load more button will be dynamically inserted here -->
       </div>
     </main>
+    
+    <!-- Sticky bottom bar -->
+    <div id="bottom-bar" class="sticky-bottom-bar">
+      <div class="selection-info">
+        <span id="selection-count">0 videos selected</span>
+      </div>
+      <div class="bulk-actions">
+        <button id="select-all" class="secondary-button">Select All</button>
+        <button id="delete-selected" class="danger-button" disabled>Delete Selected</button>
+      </div>
+    </div>
   </div>
 
   <div id="confirmation-modal" class="modal">

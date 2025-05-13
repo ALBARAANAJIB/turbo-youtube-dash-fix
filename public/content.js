@@ -137,25 +137,29 @@ function injectFetchButton() {
   const fetchButton = document.createElement('button');
   fetchButton.id = 'youtube-enhancer-fetch-button';
   fetchButton.textContent = 'Fetch My Liked Videos';
+  
+  // Updated button style to match Play/Shuffle buttons
   fetchButton.style.cssText = `
-    background-color: rgba(26, 26, 26, 0.6);
+    background-color: rgba(0, 0, 0, 0.6);
     color: white;
     border: none;
-    border-radius: 4px;
-    padding: 10px 18px;
+    border-radius: 18px;
+    padding: 0 16px;
+    height: 36px;
     font-size: 14px;
     font-weight: 500;
-    margin: 10px;
+    margin: 8px 8px 8px 0;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     font-family: Roboto, Arial, sans-serif;
     transition: background-color 0.2s;
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(10px);
     box-shadow: 0 2px 6px rgba(0,0,0,0.2);
     border: 1px solid rgba(255,255,255,0.1);
-    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    width: 100%;
+    max-width: 220px;
   `;
   
   // Add hover effect
@@ -164,7 +168,7 @@ function injectFetchButton() {
   });
   
   fetchButton.addEventListener('mouseleave', () => {
-    fetchButton.style.backgroundColor = 'rgba(26, 26, 26, 0.6)';
+    fetchButton.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
   });
   
   // Add click event
@@ -194,42 +198,28 @@ function injectFetchButton() {
     });
   });
   
-  // Find a good place to insert the button
+  // Find the button section below the "Play all" button
   const insertButton = () => {
-    // Try multiple selectors to find a good insertion point
-    const selectors = [
-      'ytd-playlist-header-renderer #top-level-buttons-computed',
-      'ytd-playlist-sidebar-renderer',
-      'ytd-playlist-header-renderer',
-      '#above-the-fold'
-    ];
+    // Look for the play buttons container
+    const playButtonsContainer = document.querySelector('ytd-button-renderer[class="style-scope ytd-playlist-header-renderer"]')?.parentElement;
     
-    let inserted = false;
-    
-    for (const selector of selectors) {
-      const element = document.querySelector(selector);
-      if (element) {
-        // Insert before the first child or append if no children
-        if (element.firstChild) {
-          element.insertBefore(fetchButton, element.firstChild);
-        } else {
-          element.appendChild(fetchButton);
-        }
-        inserted = true;
-        break;
-      }
+    if (playButtonsContainer) {
+      // Create a wrapper to mimic YouTube's style
+      const buttonWrapper = document.createElement('div');
+      buttonWrapper.style.cssText = `
+        display: flex;
+        align-items: center;
+        margin-top: 8px;
+        width: 100%;
+      `;
+      buttonWrapper.appendChild(fetchButton);
+      
+      // Insert after the play/shuffle buttons
+      playButtonsContainer.parentElement.insertBefore(buttonWrapper, playButtonsContainer.nextSibling);
+      return true;
     }
     
-    // If all else fails, try the page manager
-    if (!inserted) {
-      const pageManager = document.querySelector('ytd-page-manager');
-      if (pageManager) {
-        pageManager.prepend(fetchButton);
-        inserted = true;
-      }
-    }
-    
-    return inserted;
+    return false;
   };
   
   // Try to insert the button, if it fails, wait for the DOM to load more

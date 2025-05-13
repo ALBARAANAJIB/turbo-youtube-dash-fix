@@ -3,7 +3,10 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 import { crx } from '@crxjs/vite-plugin'
-import manifest from './public/manifest.json' assert { type: "json" }
+import manifestJson from './public/manifest.json'
+
+// Fix the type issue with manifest
+const manifest = manifestJson as any;
 
 // https://vitejs.dev/config/
 export default defineConfig({
