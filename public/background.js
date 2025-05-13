@@ -1,3 +1,4 @@
+
 // OAuth 2.0 constants
 const CLIENT_ID = '304162096302-c470kd77du16s0lrlumobc6s8u6uleng.apps.googleusercontent.com';
 const REDIRECT_URL = chrome.identity.getRedirectURL();
@@ -334,9 +335,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           url: url,
           filename: `youtube-liked-videos-${timestamp}.json`,
           saveAs: true
+        }, (downloadId) => {
+          if (chrome.runtime.lastError) {
+            console.error("Download failed:", chrome.runtime.lastError);
+            sendResponse({ success: false, error: chrome.runtime.lastError.message });
+          } else {
+            console.log("Download started with ID:", downloadId);
+            sendResponse({ success: true, count: allVideos.length });
+          }
         });
         
-        sendResponse({ success: true, count: allVideos.length });
+        return true; // Keep the message channel open for the async response
       } catch (error) {
         console.error('Error exporting data:', error);
         sendResponse({ success: false, error: error.message });

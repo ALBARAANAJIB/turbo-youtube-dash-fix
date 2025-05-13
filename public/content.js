@@ -122,11 +122,12 @@ function injectFetchButton() {
   // Check if we're on a YouTube page
   if (!window.location.hostname.includes('youtube.com')) return;
   
-  // Check if we're on the liked videos page or any page with a playlist header
-  const isLikedVideosPage = window.location.href.includes('playlist?list=LL') || 
-                            document.querySelector('ytd-playlist-header-renderer');
+  // Check if we're on the liked videos page
+  const isLikedVideosPage = window.location.href.includes('playlist?list=LL');
   
   if (!isLikedVideosPage) return;
+  
+  console.log('Detected liked videos page, attempting to inject buttons...');
   
   // Remove any existing fetch and export buttons
   const existingButton = document.getElementById('youtube-enhancer-fetch-button');
@@ -135,16 +136,31 @@ function injectFetchButton() {
   const existingExportButton = document.getElementById('youtube-enhancer-export-button');
   if (existingExportButton) existingExportButton.remove();
   
-  // Create the buttons container div
+  // Find the play button for placement reference
+  const playButton = document.querySelector('ytd-button-renderer[class="style-scope ytd-playlist-header-renderer"]');
+  if (!playButton) {
+    console.log('Play button not found, retrying later...');
+    return false;
+  }
+  
+  // Find proper container
+  const topRow = playButton.closest('div#top-row');
+  if (!topRow) {
+    console.log('Top row container not found, retrying later...');
+    return false;
+  }
+  
+  // Create buttons container
   const buttonsContainer = document.createElement('div');
   buttonsContainer.id = 'youtube-enhancer-buttons-container';
   buttonsContainer.style.cssText = `
-    margin-top: 12px;
     display: flex;
-    flex-direction: column;
     gap: 8px;
-    width: 100%;
+    margin-top: 12px;
   `;
+  
+  // Get style from play button for consistency
+  const playButtonStyle = window.getComputedStyle(playButton.querySelector('button, a'));
   
   // Create the fetch button
   const fetchButton = document.createElement('button');
@@ -167,8 +183,7 @@ function injectFetchButton() {
     justify-content: center;
     font-family: Roboto, Arial, sans-serif;
     transition: background-color 0.2s;
-    backdrop-filter: blur(10px);
-    width: 122px; /* Match the Play All button width */
+    width: ${playButtonStyle.width || '120px'};
   `;
   
   // Add hover effect
@@ -201,8 +216,7 @@ function injectFetchButton() {
     justify-content: center;
     font-family: Roboto, Arial, sans-serif;
     transition: background-color 0.2s;
-    backdrop-filter: blur(10px);
-    width: 122px; /* Match the Play All button width */
+    width: ${playButtonStyle.width || '120px'};
   `;
   
   // Add hover effect to export button
@@ -250,12 +264,22 @@ function injectFetchButton() {
     
     // Send message to background script
     chrome.runtime.sendMessage({ action: 'exportData' }, (response) => {
-      // Reset button after a short delay
-      setTimeout(() => {
-        exportButton.textContent = 'Export All Videos';
-        exportButton.disabled = false;
-        exportButton.style.opacity = '1';
-      }, 1500);
+      // Reset button state based on response
+      if (response && response.success) {
+        exportButton.textContent = 'Export Complete!';
+        setTimeout(() => {
+          exportButton.textContent = 'Export All Videos';
+          exportButton.disabled = false;
+          exportButton.style.opacity = '1';
+        }, 2000);
+      } else {
+        exportButton.textContent = 'Export Failed';
+        setTimeout(() => {
+          exportButton.textContent = 'Export All Videos';
+          exportButton.disabled = false;
+          exportButton.style.opacity = '1';
+        }, 2000);
+      }
     });
   });
   
@@ -263,42 +287,10 @@ function injectFetchButton() {
   buttonsContainer.appendChild(fetchButton);
   buttonsContainer.appendChild(exportButton);
   
-  // Find the button section below the "Play all" button
-  const insertButtons = () => {
-    // Look for the play button
-    const playButton = document.querySelector('ytd-button-renderer[class="style-scope ytd-playlist-header-renderer"]');
-    
-    if (playButton && playButton.parentElement) {
-      // We want to insert after the parent container that holds the play and shuffle buttons
-      const buttonsContainer = playButton.closest('div#top-row');
-      
-      if (buttonsContainer) {
-        // Insert our buttons container
-        buttonsContainer.parentElement.appendChild(document.createElement('br')); // Add a line break for spacing
-        buttonsContainer.parentElement.appendChild(buttonsContainer);
-        return true;
-      }
-    }
-    
-    return false;
-  };
-  
-  // Try to insert the buttons, if it fails, wait for the DOM to load more
-  if (!insertButtons()) {
-    const observer = new MutationObserver((mutations, obs) => {
-      if (insertButtons()) {
-        obs.disconnect(); // Stop observing once buttons are inserted
-      }
-    });
-    
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
-    
-    // Stop observing after 10 seconds to prevent memory leaks
-    setTimeout(() => observer.disconnect(), 10000);
-  }
+  // Insert after the top row
+  topRow.parentElement.insertBefore(buttonsContainer, topRow.nextSibling);
+  console.log('Buttons injected successfully');
+  return true;
 }
 
 // Handle URL changes (YouTube is a SPA)
@@ -306,13 +298,17 @@ function handleUrlChange() {
   let lastUrl = location.href;
   
   // Call once on initial load
-  injectFetchButton();
+  setTimeout(() => {
+    injectFetchButton();
+    console.log('Initial button injection attempted');
+  }, 2000);
   
   // Create an observer to watch for URL changes
   const observer = new MutationObserver(() => {
     if (lastUrl !== location.href) {
       lastUrl = location.href;
-      setTimeout(injectFetchButton, 1000); // Delay to ensure page loads
+      console.log('URL changed, attempting button injection');
+      setTimeout(() => injectFetchButton(), 2000); // Increased delay for better reliability
     }
   });
   
@@ -330,10 +326,18 @@ if (document.readyState === 'loading') {
 // Re-inject button when visibility changes (e.g., if "show unavailable videos" is toggled)
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
-    setTimeout(injectFetchButton, 1000);
+    console.log('Page became visible, checking for buttons');
+    setTimeout(injectFetchButton, 2000);
   }
 });
 
-// Re-check for the button periodically to ensure it's still there
-// This helps if YouTube's UI changes or elements get removed
-setInterval(injectFetchButton, 10000);
+// Periodically check if buttons need to be injected (YouTube's dynamic loading)
+setInterval(() => {
+  const isLikedVideosPage = window.location.href.includes('playlist?list=LL');
+  const buttonsExist = document.getElementById('youtube-enhancer-fetch-button');
+  
+  if (isLikedVideosPage && !buttonsExist) {
+    console.log('Periodic check: buttons missing, trying to inject');
+    injectFetchButton();
+  }
+}, 5000);

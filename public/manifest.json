@@ -31,7 +31,8 @@
   "permissions": [
     "storage",
     "identity",
-    "tabs"
+    "tabs",
+    "downloads"
   ],
   "oauth2": {
     "client_id": "304162096302-c470kd77du16s0lrlumobc6s8u6uleng.apps.googleusercontent.com",
