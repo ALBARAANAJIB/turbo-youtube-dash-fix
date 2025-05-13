@@ -95,7 +95,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Export data
   exportDataButton.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ action: 'exportData' });
+    exportDataButton.disabled = true;
+    const originalText = exportDataButton.textContent;
+    exportDataButton.textContent = 'Exporting...';
+    
+    chrome.runtime.sendMessage({ action: 'exportData' }, (response) => {
+      setTimeout(() => {
+        exportDataButton.disabled = false;
+        exportDataButton.textContent = originalText;
+        
+        if (response && response.success) {
+          // Show a success message in the popup
+          const successMessage = document.createElement('div');
+          successMessage.classList.add('success-message');
+          successMessage.textContent = `${response.count} videos exported!`;
+          
+          // Insert after the export button
+          exportDataButton.parentNode.insertBefore(successMessage, exportDataButton.nextSibling);
+          
+          // Remove after 3 seconds
+          setTimeout(() => {
+            successMessage.remove();
+          }, 3000);
+        }
+      }, 1000);
+    });
   });
 
   // AI Summary

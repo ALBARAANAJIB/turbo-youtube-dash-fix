@@ -1,4 +1,3 @@
-
 // OAuth 2.0 constants
 const CLIENT_ID = '304162096302-c470kd77du16s0lrlumobc6s8u6uleng.apps.googleusercontent.com';
 const REDIRECT_URL = chrome.identity.getRedirectURL();
@@ -229,26 +228,121 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'exportData') {
-    chrome.storage.local.get('likedVideos', (result) => {
-      if (!result.likedVideos || result.likedVideos.length === 0) {
-        alert('No data to export. Please fetch your liked videos first.');
+    chrome.storage.local.get(['userToken', 'likedVideos', 'totalResults'], async (result) => {
+      if (!result.userToken) {
+        sendResponse({ success: false, error: 'Not authenticated' });
         return;
       }
       
-      // Create exportable data
-      const exportData = JSON.stringify(result.likedVideos, null, 2);
-      
-      // Create a blob and download it
-      const blob = new Blob([exportData], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      
-      chrome.downloads.download({
-        url: url,
-        filename: 'youtube-liked-videos.json',
-        saveAs: true
-      });
+      try {
+        // If we have videos in storage, use them as a starting point
+        let allVideos = result.likedVideos || [];
+        
+        // Check if we need to fetch more videos first (if we don't have all of them)
+        if (allVideos.length < (result.totalResults || 0)) {
+          // We need to fetch more videos to export everything
+          console.log(`We have ${allVideos.length} of ${result.totalResults} videos. Fetching more for export...`);
+          
+          // Get the user's "liked videos" playlist ID
+          const channelResponse = await fetch(`${CHANNELS_ENDPOINT}?part=contentDetails&mine=true`, {
+            headers: { Authorization: `Bearer ${result.userToken}` }
+          });
+          
+          if (!channelResponse.ok) throw new Error('Failed to fetch channel data');
+          
+          const channelData = await channelResponse.json();
+          const likedPlaylistId = channelData.items[0].contentDetails.relatedPlaylists.likes;
+          
+          // Fetch all pages of videos
+          let nextPageToken = null;
+          let pageCount = 1;
+          
+          do {
+            console.log(`Fetching page ${pageCount} of videos for export...`);
+            
+            // Construct the endpoint URL with pageToken if we have one
+            let endpoint = `${PLAYLIST_ITEMS_ENDPOINT}?part=snippet,contentDetails&maxResults=50&playlistId=${likedPlaylistId}`;
+            if (nextPageToken) {
+              endpoint += `&pageToken=${nextPageToken}`;
+            }
+            
+            const playlistResponse = await fetch(endpoint, {
+              headers: { Authorization: `Bearer ${result.userToken}` }
+            });
+            
+            if (!playlistResponse.ok) throw new Error('Failed to fetch playlist items');
+            
+            const playlistData = await playlistResponse.json();
+            
+            // Get video details for the playlist items
+            const videoIds = playlistData.items.map(item => item.contentDetails.videoId).join(',');
+            
+            const videosResponse = await fetch(`${LIKED_VIDEOS_ENDPOINT}?part=snippet,statistics,contentDetails&id=${videoIds}`, {
+              headers: { Authorization: `Bearer ${result.userToken}` }
+            });
+            
+            if (!videosResponse.ok) throw new Error('Failed to fetch video details');
+            
+            const videosData = await videosResponse.json();
+            
+            // Map playlist items to our video objects
+            const pageVideos = playlistData.items.map(item => {
+              const videoId = item.contentDetails.videoId;
+              const videoDetails = videosData.items.find(v => v.id === videoId);
+              
+              if (!videoDetails) return null;
+              
+              return {
+                id: videoId,
+                title: videoDetails.snippet.title,
+                description: videoDetails.snippet.description,
+                channelTitle: videoDetails.snippet.channelTitle,
+                channelId: videoDetails.snippet.channelId,
+                publishedAt: videoDetails.snippet.publishedAt,
+                likedAt: item.snippet.publishedAt,
+                thumbnail: videoDetails.snippet.thumbnails,
+                viewCount: videoDetails.statistics?.viewCount || '0',
+                likeCount: videoDetails.statistics?.likeCount || '0',
+                duration: videoDetails.contentDetails?.duration || '',
+                url: `https://www.youtube.com/watch?v=${videoId}`,
+                channelUrl: `https://www.youtube.com/channel/${videoDetails.snippet.channelId}`
+              };
+            }).filter(Boolean);
+            
+            // Add to our collection
+            allVideos = [...allVideos, ...pageVideos];
+            
+            // Check if there are more pages
+            nextPageToken = playlistData.nextPageToken;
+            pageCount++;
+            
+          } while (nextPageToken);
+        }
+        
+        console.log(`Exporting ${allVideos.length} videos in total`);
+        
+        // Create exportable data with more detailed information
+        const exportData = JSON.stringify(allVideos, null, 2);
+        
+        // Create a blob and download it
+        const blob = new Blob([exportData], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        
+        chrome.downloads.download({
+          url: url,
+          filename: `youtube-liked-videos-${timestamp}.json`,
+          saveAs: true
+        });
+        
+        sendResponse({ success: true, count: allVideos.length });
+      } catch (error) {
+        console.error('Error exporting data:', error);
+        sendResponse({ success: false, error: error.message });
+      }
     });
-    return false; // No async response needed
+    return true; // Keep the message channel open for the async response
   }
 
   if (request.action === 'deleteVideo') {

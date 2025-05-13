@@ -1,4 +1,3 @@
-
 // Listen for messages from the background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'showToast') {
@@ -129,16 +128,30 @@ function injectFetchButton() {
   
   if (!isLikedVideosPage) return;
   
-  // Remove any existing fetch button
+  // Remove any existing fetch and export buttons
   const existingButton = document.getElementById('youtube-enhancer-fetch-button');
   if (existingButton) existingButton.remove();
   
-  // Create the button
+  const existingExportButton = document.getElementById('youtube-enhancer-export-button');
+  if (existingExportButton) existingExportButton.remove();
+  
+  // Create the buttons container div
+  const buttonsContainer = document.createElement('div');
+  buttonsContainer.id = 'youtube-enhancer-buttons-container';
+  buttonsContainer.style.cssText = `
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  `;
+  
+  // Create the fetch button
   const fetchButton = document.createElement('button');
   fetchButton.id = 'youtube-enhancer-fetch-button';
   fetchButton.textContent = 'Fetch My Liked Videos';
   
-  // Updated button style to match Play/Shuffle buttons
+  // Style the button to match Play All button
   fetchButton.style.cssText = `
     background-color: rgba(0, 0, 0, 0.6);
     color: white;
@@ -148,7 +161,6 @@ function injectFetchButton() {
     height: 36px;
     font-size: 14px;
     font-weight: 500;
-    margin: 8px 8px 8px 0;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -156,10 +168,7 @@ function injectFetchButton() {
     font-family: Roboto, Arial, sans-serif;
     transition: background-color 0.2s;
     backdrop-filter: blur(10px);
-    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-    border: 1px solid rgba(255,255,255,0.1);
-    width: 100%;
-    max-width: 220px;
+    width: 122px; /* Match the Play All button width */
   `;
   
   // Add hover effect
@@ -171,7 +180,41 @@ function injectFetchButton() {
     fetchButton.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
   });
   
-  // Add click event
+  // Create the export button
+  const exportButton = document.createElement('button');
+  exportButton.id = 'youtube-enhancer-export-button';
+  exportButton.textContent = 'Export All Videos';
+  
+  // Style the export button to match the fetch button
+  exportButton.style.cssText = `
+    background-color: rgba(0, 0, 0, 0.6);
+    color: white;
+    border: none;
+    border-radius: 18px;
+    padding: 0 16px;
+    height: 36px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: Roboto, Arial, sans-serif;
+    transition: background-color 0.2s;
+    backdrop-filter: blur(10px);
+    width: 122px; /* Match the Play All button width */
+  `;
+  
+  // Add hover effect to export button
+  exportButton.addEventListener('mouseenter', () => {
+    exportButton.style.backgroundColor = 'rgba(234, 56, 76, 0.8)';
+  });
+  
+  exportButton.addEventListener('mouseleave', () => {
+    exportButton.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+  });
+  
+  // Add click event to fetch button
   fetchButton.addEventListener('click', () => {
     // Show loading state
     fetchButton.textContent = 'Fetching...';
@@ -198,35 +241,53 @@ function injectFetchButton() {
     });
   });
   
-  // Find the button section below the "Play all" button
-  const insertButton = () => {
-    // Look for the play buttons container
-    const playButtonsContainer = document.querySelector('ytd-button-renderer[class="style-scope ytd-playlist-header-renderer"]')?.parentElement;
+  // Add click event to export button
+  exportButton.addEventListener('click', () => {
+    // Show loading state
+    exportButton.textContent = 'Exporting...';
+    exportButton.disabled = true;
+    exportButton.style.opacity = '0.7';
     
-    if (playButtonsContainer) {
-      // Create a wrapper to mimic YouTube's style
-      const buttonWrapper = document.createElement('div');
-      buttonWrapper.style.cssText = `
-        display: flex;
-        align-items: center;
-        margin-top: 8px;
-        width: 100%;
-      `;
-      buttonWrapper.appendChild(fetchButton);
+    // Send message to background script
+    chrome.runtime.sendMessage({ action: 'exportData' }, (response) => {
+      // Reset button after a short delay
+      setTimeout(() => {
+        exportButton.textContent = 'Export All Videos';
+        exportButton.disabled = false;
+        exportButton.style.opacity = '1';
+      }, 1500);
+    });
+  });
+  
+  // Append buttons to the container
+  buttonsContainer.appendChild(fetchButton);
+  buttonsContainer.appendChild(exportButton);
+  
+  // Find the button section below the "Play all" button
+  const insertButtons = () => {
+    // Look for the play button
+    const playButton = document.querySelector('ytd-button-renderer[class="style-scope ytd-playlist-header-renderer"]');
+    
+    if (playButton && playButton.parentElement) {
+      // We want to insert after the parent container that holds the play and shuffle buttons
+      const buttonsContainer = playButton.closest('div#top-row');
       
-      // Insert after the play/shuffle buttons
-      playButtonsContainer.parentElement.insertBefore(buttonWrapper, playButtonsContainer.nextSibling);
-      return true;
+      if (buttonsContainer) {
+        // Insert our buttons container
+        buttonsContainer.parentElement.appendChild(document.createElement('br')); // Add a line break for spacing
+        buttonsContainer.parentElement.appendChild(buttonsContainer);
+        return true;
+      }
     }
     
     return false;
   };
   
-  // Try to insert the button, if it fails, wait for the DOM to load more
-  if (!insertButton()) {
+  // Try to insert the buttons, if it fails, wait for the DOM to load more
+  if (!insertButtons()) {
     const observer = new MutationObserver((mutations, obs) => {
-      if (insertButton()) {
-        obs.disconnect(); // Stop observing once button is inserted
+      if (insertButtons()) {
+        obs.disconnect(); // Stop observing once buttons are inserted
       }
     });
     
