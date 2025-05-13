@@ -1,4 +1,3 @@
-
 // OAuth 2.0 constants
 const CLIENT_ID = '304162096302-c470kd77du16s0lrlumobc6s8u6uleng.apps.googleusercontent.com';
 const REDIRECT_URL = chrome.identity.getRedirectURL();
@@ -325,15 +324,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // Create exportable data with more detailed information
         const exportData = JSON.stringify(allVideos, null, 2);
         
-        // Create a blob and download it
-        const blob = new Blob([exportData], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        
+        // FIX: Use a direct download approach instead of URL.createObjectURL
+        // Service workers don't support URL.createObjectURL, so we use chrome.downloads directly
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `youtube-liked-videos-${timestamp}.json`;
+        
+        // Use a data URL instead of a Blob URL
+        const dataUrl = 'data:application/json;base64,' + btoa(unescape(encodeURIComponent(exportData)));
         
         chrome.downloads.download({
-          url: url,
-          filename: `youtube-liked-videos-${timestamp}.json`,
+          url: dataUrl,
+          filename: filename,
           saveAs: true
         }, (downloadId) => {
           if (chrome.runtime.lastError) {
@@ -345,7 +346,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           }
         });
         
-        return true; // Keep the message channel open for the async response
       } catch (error) {
         console.error('Error exporting data:', error);
         sendResponse({ success: false, error: error.message });

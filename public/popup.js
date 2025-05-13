@@ -100,6 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
     exportDataButton.textContent = 'Exporting...';
     
     chrome.runtime.sendMessage({ action: 'exportData' }, (response) => {
+      // Clear timeout to prevent race conditions
       setTimeout(() => {
         exportDataButton.disabled = false;
         exportDataButton.textContent = originalText;
@@ -117,6 +118,22 @@ document.addEventListener('DOMContentLoaded', () => {
           setTimeout(() => {
             successMessage.remove();
           }, 3000);
+        } else {
+          // Show error message
+          const errorMessage = document.createElement('div');
+          errorMessage.classList.add('error-message');
+          errorMessage.style.color = '#ff3333';
+          errorMessage.textContent = 'Export failed. Please try again.';
+          
+          // Insert after the export button
+          exportDataButton.parentNode.insertBefore(errorMessage, exportDataButton.nextSibling);
+          
+          // Remove after 3 seconds
+          setTimeout(() => {
+            errorMessage.remove();
+          }, 3000);
+          
+          console.error('Export failed:', response?.error || 'Unknown error');
         }
       }, 1000);
     });
