@@ -1,4 +1,3 @@
-
 // Listen for messages from the background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'showToast') {
@@ -134,62 +133,19 @@ function injectFetchButton() {
   const existingButton = document.getElementById('youtube-enhancer-fetch-button');
   if (existingButton) existingButton.remove();
   
-  // Find the Play All button to position our button correctly
-  const findPlayButton = () => {
-    // First try the normal selector which should work on most YouTube versions
-    let playButton = document.querySelector('ytd-button-renderer[class*="style-scope ytd-playlist-header-renderer"]');
-    
-    // If not found, try looking for any playlist button with "Play" text
-    if (!playButton) {
-      const buttons = document.querySelectorAll('ytd-button-renderer');
-      for (const btn of buttons) {
-        if (btn.textContent?.trim().includes('Play')) {
-          playButton = btn;
-          break;
-        }
-      }
-    }
-    
-    return playButton;
-  };
-  
-  const playButton = findPlayButton();
-  if (!playButton) {
-    console.log('Play button not found, will retry later');
-    setTimeout(injectFetchButton, 2000);
-    return;
-  }
-  
-  // Get the parent container to insert our button
-  const topRow = playButton.closest('div#top-row') || 
-                playButton.closest('div.playlist-header-description') || 
-                playButton.closest('ytd-playlist-header-renderer');
-  
-  if (!topRow) {
-    console.log('Top row container not found, will retry later');
-    setTimeout(injectFetchButton, 2000);
-    return;
-  }
-  
-  // Create fetch button
+  // Create fetch button with a simpler, more reliable approach
   const fetchButton = document.createElement('button');
   fetchButton.id = 'youtube-enhancer-fetch-button';
   fetchButton.textContent = 'Fetch My Liked Videos';
   
-  // Get actual computed dimensions of play button for matching size
-  const playButtonEl = playButton.querySelector('button, a, tp-yt-paper-button');
-  const playButtonStyle = window.getComputedStyle(playButtonEl);
-  const playButtonHeight = playButtonEl?.offsetHeight || 36;
-  const playButtonBorderRadius = playButtonStyle.borderRadius || '18px';
-  
-  // Style the button to match Play All button
+  // Style the button with fixed values instead of computed values
   fetchButton.style.cssText = `
     background-color: rgba(0, 0, 0, 0.6);
     color: white;
     border: none;
-    border-radius: ${playButtonBorderRadius};
+    border-radius: 18px;
     padding: 0 16px;
-    height: ${playButtonHeight}px;
+    height: 36px;
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
@@ -199,6 +155,8 @@ function injectFetchButton() {
     font-family: Roboto, Arial, sans-serif;
     transition: background-color 0.2s;
     margin-top: 8px;
+    position: relative;
+    z-index: 9999;
   `;
   
   // Add hover effect
@@ -236,17 +194,35 @@ function injectFetchButton() {
       }
     });
   });
+
+  // Find a reliable place to insert the button
+  // First try to find the top row
+  let container = document.querySelector('div#top-row') || 
+                 document.querySelector('div.playlist-header-description') || 
+                 document.querySelector('ytd-playlist-header-renderer');
   
-  // Create a container for the button (for proper spacing)
-  const buttonContainer = document.createElement('div');
-  buttonContainer.style.cssText = `
-    display: flex;
-    margin-top: 12px;
-  `;
-  buttonContainer.appendChild(fetchButton);
+  // If we can't find the container, create a floating button in fixed position
+  if (!container) {
+    console.log('Could not find container, creating floating button');
+    fetchButton.style.position = 'fixed';
+    fetchButton.style.top = '120px';
+    fetchButton.style.right = '20px';
+    fetchButton.style.zIndex = '9999';
+    document.body.appendChild(fetchButton);
+  } else {
+    // Create a container for the button (for proper spacing)
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.cssText = `
+      display: flex;
+      margin: 12px 0;
+      padding: 0 8px;
+    `;
+    buttonContainer.appendChild(fetchButton);
+    
+    // Insert into the container
+    container.appendChild(buttonContainer);
+  }
   
-  // Insert after the top row
-  playButton.parentElement.insertBefore(buttonContainer, playButton.nextSibling);
   console.log('Button injected successfully');
 }
 
