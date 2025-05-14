@@ -1,4 +1,3 @@
-
 // Listen for messages from the background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'showToast') {
@@ -118,8 +117,8 @@ function showToast(message, count) {
   }, 5000);
 }
 
-// Function to inject the "Fetch My Liked Videos" button
-function injectFetchButton() {
+// Function to inject the "Fetch My Liked Videos" button and "Export Videos" button
+function injectButtons() {
   // Check if we're on a YouTube page
   if (!window.location.hostname.includes('youtube.com')) return;
   
@@ -128,14 +127,17 @@ function injectFetchButton() {
   
   if (!isLikedVideosPage) return;
   
-  console.log('Detected liked videos page, attempting to inject button...');
+  console.log('Detected liked videos page, attempting to inject buttons...');
   
-  // Remove any existing fetch button
-  const existingButton = document.getElementById('youtube-enhancer-fetch-button');
-  if (existingButton) existingButton.remove();
+  // Remove any existing buttons
+  const existingFetchButton = document.getElementById('youtube-enhancer-fetch-button');
+  if (existingFetchButton) existingFetchButton.remove();
+  
+  const existingExportButton = document.getElementById('youtube-enhancer-export-button');
+  if (existingExportButton) existingExportButton.remove();
   
   // Try multiple placement strategies for better reliability
-  const placeButtonInUI = () => {
+  const placeButtonsInUI = () => {
     // Strategy 1: Look for play all / shuffle container
     const playAllContainer = document.querySelector('ytd-playlist-header-renderer #top-level-buttons-computed');
     
@@ -152,55 +154,22 @@ function injectFetchButton() {
       return false;
     }
     
-    // Create a button that matches YouTube's styling
-    const fetchButton = document.createElement('button');
-    fetchButton.id = 'youtube-enhancer-fetch-button';
-    fetchButton.textContent = 'Fetch My Liked Videos';
-    
-    // Apply YouTube-like styling with our custom purple theme
-    fetchButton.style.cssText = `
-      background-color: #9b87f5;
-      color: white;
-      border: none;
-      border-radius: 18px;
-      padding: 0 16px;
-      height: 36px;
-      font-size: 14px;
-      font-weight: 500;
-      margin-left: 8px;
-      cursor: pointer;
-      display: flex;
+    // Create a button container div to hold both buttons
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.cssText = `
+      display: inline-flex;
+      gap: 8px;
+      margin-left: 12px;
       align-items: center;
-      justify-content: center;
-      transition: all 0.2s ease;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
     `;
     
-    // Add hover effect
-    fetchButton.addEventListener('mouseenter', () => {
-      fetchButton.style.backgroundColor = '#7E69AB';
-      fetchButton.style.transform = 'translateY(-1px)';
-      fetchButton.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
-    });
+    // Create fetch button that matches YouTube's styling
+    const fetchButton = createYouTubeStyleButton('Fetch My Liked Videos', 'youtube-enhancer-fetch-button');
     
-    fetchButton.addEventListener('mouseleave', () => {
-      fetchButton.style.backgroundColor = '#9b87f5';
-      fetchButton.style.transform = 'translateY(0)';
-      fetchButton.style.boxShadow = '0 1px 2px rgba(0,0,0,0.1)';
-    });
+    // Create export button that matches YouTube's styling
+    const exportButton = createYouTubeStyleButton('Export Videos', 'youtube-enhancer-export-button');
     
-    // Add active effect
-    fetchButton.addEventListener('mousedown', () => {
-      fetchButton.style.transform = 'translateY(1px)';
-      fetchButton.style.boxShadow = '0 0 2px rgba(0,0,0,0.2)';
-    });
-    
-    fetchButton.addEventListener('mouseup', () => {
-      fetchButton.style.transform = 'translateY(-1px)';
-      fetchButton.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
-    });
-    
-    // Add click event
+    // Add click event for fetch button
     fetchButton.addEventListener('click', () => {
       // Show loading state
       fetchButton.textContent = 'Fetching...';
@@ -224,13 +193,41 @@ function injectFetchButton() {
       });
     });
     
+    // Add click event for export button
+    exportButton.addEventListener('click', () => {
+      // Show loading state
+      exportButton.textContent = 'Exporting...';
+      exportButton.disabled = true;
+      exportButton.style.opacity = '0.7';
+      
+      // Send message to background script
+      chrome.runtime.sendMessage({ action: 'exportData' }, (response) => {
+        // Reset button
+        exportButton.textContent = 'Export Videos';
+        exportButton.disabled = false;
+        exportButton.style.opacity = '1';
+        
+        if (!response || !response.success) {
+          // Show error temporarily
+          exportButton.textContent = 'Error. Try Again';
+          setTimeout(() => {
+            exportButton.textContent = 'Export Videos';
+          }, 3000);
+        }
+      });
+    });
+    
+    // Add buttons to container
+    buttonContainer.appendChild(fetchButton);
+    buttonContainer.appendChild(exportButton);
+    
     // If it's the play all container (our preferred location)
     if (targetContainer === playAllContainer) {
-      // Try to place button after existing buttons
-      targetContainer.appendChild(fetchButton);
+      // Try to place buttons after existing buttons
+      targetContainer.appendChild(buttonContainer);
     } else if (targetContainer === alternativeContainer) {
       // Insert before the container for better positioning
-      targetContainer.parentNode.insertBefore(fetchButton, targetContainer);
+      targetContainer.parentNode.insertBefore(buttonContainer, targetContainer);
     } else {
       // Last resort - just append to the header
       const buttonsDiv = document.createElement('div');
@@ -238,22 +235,73 @@ function injectFetchButton() {
         margin: 16px 0;
         display: flex;
       `;
-      buttonsDiv.appendChild(fetchButton);
+      buttonsDiv.appendChild(buttonContainer);
       targetContainer.appendChild(buttonsDiv);
     }
     
-    console.log('Button injected successfully');
+    console.log('Buttons injected successfully');
     return true;
   };
   
-  // Try to place the button immediately
-  if (!placeButtonInUI()) {
+  // Helper function to create YouTube-styled buttons
+  function createYouTubeStyleButton(text, id) {
+    const button = document.createElement('button');
+    button.id = id;
+    button.textContent = text;
+    
+    // Apply YouTube-like styling with our custom purple theme
+    button.style.cssText = `
+      background-color: #9b87f5;
+      color: white;
+      border: none;
+      border-radius: 18px;
+      padding: 0 16px;
+      height: 36px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    `;
+    
+    // Add hover effect
+    button.addEventListener('mouseenter', () => {
+      button.style.backgroundColor = '#7E69AB';
+      button.style.transform = 'translateY(-1px)';
+      button.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+    });
+    
+    button.addEventListener('mouseleave', () => {
+      button.style.backgroundColor = '#9b87f5';
+      button.style.transform = 'translateY(0)';
+      button.style.boxShadow = '0 1px 2px rgba(0,0,0,0.1)';
+    });
+    
+    // Add active effect
+    button.addEventListener('mousedown', () => {
+      button.style.transform = 'translateY(1px)';
+      button.style.boxShadow = '0 0 2px rgba(0,0,0,0.2)';
+    });
+    
+    button.addEventListener('mouseup', () => {
+      button.style.transform = 'translateY(-1px)';
+      button.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+    });
+    
+    return button;
+  }
+  
+  // Try to place the buttons immediately
+  if (!placeButtonsInUI()) {
     // If initial placement fails, retry with increasing delays
     const retryTimes = [500, 1000, 2000, 3000, 5000];
     retryTimes.forEach(delay => {
       setTimeout(() => {
         if (!document.getElementById('youtube-enhancer-fetch-button')) {
-          placeButtonInUI();
+          placeButtonsInUI();
         }
       }, delay);
     });
@@ -264,17 +312,17 @@ function injectFetchButton() {
 function handleUrlChange() {
   let lastUrl = location.href;
   
-  // Function to check and inject button when needed
+  // Function to check and inject buttons when needed
   const checkAndInject = () => {
     if (window.location.href.includes('playlist?list=LL')) {
-      console.log('Liked videos page detected, injecting button');
+      console.log('Liked videos page detected, injecting buttons');
       
       // Initial injection
-      injectFetchButton();
+      injectButtons();
       
       // Set up additional checks after page state changes
-      setTimeout(injectFetchButton, 1000);
-      setTimeout(injectFetchButton, 2500);
+      setTimeout(injectButtons, 1000);
+      setTimeout(injectButtons, 2500);
     }
   };
   
@@ -315,11 +363,20 @@ function handleUrlChange() {
             }
           }
         }
+        
+        // Check specifically for the "Unavailable videos are hidden" alert
+        if (mutation.target && 
+            mutation.target.textContent && 
+            mutation.target.textContent.includes('Unavailable videos are')) {
+          console.log('Detected unavailable videos toggle - reinjecting buttons');
+          setTimeout(injectButtons, 500);
+          setTimeout(injectButtons, 1500);
+        }
       }
       
       if (shouldReinject) {
-        console.log('Detected content changes - reinjecting button');
-        setTimeout(injectFetchButton, 500);
+        console.log('Detected content changes - reinjecting buttons');
+        setTimeout(injectButtons, 500);
       }
     }
   });
@@ -329,7 +386,8 @@ function handleUrlChange() {
     subtree: true, 
     childList: true,
     attributes: true,
-    attributeFilter: ['class', 'style', 'hidden']
+    attributeFilter: ['class', 'style', 'hidden'],
+    characterData: true
   });
   
   // Watch for YouTube's SPA navigation events
@@ -337,8 +395,8 @@ function handleUrlChange() {
     console.log('YouTube navigation event detected');
     if (window.location.href.includes('playlist?list=LL')) {
       console.log('Navigated to liked videos page');
-      setTimeout(injectFetchButton, 1000);
-      setTimeout(injectFetchButton, 2500);  // Additional safety check
+      setTimeout(injectButtons, 1000);
+      setTimeout(injectButtons, 2500);  // Additional safety check
     }
   });
 }
@@ -355,8 +413,8 @@ document.addEventListener('yt-action', (event) => {
   if (event.detail?.actionName === 'yt-append-continuation' || 
       event.detail?.actionName === 'ytd-update-grid-state') {
     if (window.location.href.includes('playlist?list=LL')) {
-      console.log('YouTube action detected, checking button');
-      setTimeout(injectFetchButton, 1000);
+      console.log('YouTube action detected, checking buttons');
+      setTimeout(injectButtons, 1000);
     }
   }
 });
@@ -365,18 +423,19 @@ document.addEventListener('yt-action', (event) => {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && 
       window.location.href.includes('playlist?list=LL')) {
-    console.log('Page became visible, ensuring button exists');
-    setTimeout(injectFetchButton, 1000);
+    console.log('Page became visible, ensuring buttons exist');
+    setTimeout(injectButtons, 1000);
   }
 });
 
 // Also set up periodic checks as a safety measure
 setInterval(() => {
   if (window.location.href.includes('playlist?list=LL')) {
-    const buttonExists = document.getElementById('youtube-enhancer-fetch-button');
-    if (!buttonExists) {
-      console.log('Periodic check: button missing, reinjecting');
-      injectFetchButton();
+    const fetchButtonExists = document.getElementById('youtube-enhancer-fetch-button');
+    const exportButtonExists = document.getElementById('youtube-enhancer-export-button');
+    if (!fetchButtonExists || !exportButtonExists) {
+      console.log('Periodic check: buttons missing, reinjecting');
+      injectButtons();
     }
   }
 }, 5000);
