@@ -4,16 +4,18 @@ import react from '@vitejs/plugin-react'
 import path from 'path'
 import { crx } from '@crxjs/vite-plugin'
 import manifestJson from './public/manifest.json'
+import { componentTagger } from "lovable-tagger"
 
 // Fix the type issue with manifest
 const manifest = manifestJson as any;
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
+    mode === 'development' && componentTagger(),
     crx({ manifest }),
-  ],
+  ].filter(Boolean),
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -35,4 +37,4 @@ export default defineConfig({
       },
     }
   }
-})
+}))
