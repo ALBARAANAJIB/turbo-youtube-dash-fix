@@ -104,7 +104,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             likedAt: item.snippet.publishedAt,
             thumbnail: videoDetails.snippet.thumbnails.medium?.url || '',
             viewCount: videoDetails.statistics?.viewCount || '0',
-            likeCount: videoDetails.statistics?.likeCount || '0'
+            likeCount: videoDetails.statistics?.likeCount || '0',
+            url: `https://www.youtube.com/watch?v=${videoId}`
           };
         }).filter(Boolean); // Remove any nulls
         
@@ -139,7 +140,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true; // Keep the message channel open for the async response
   }
 
-  // Add proper handler for fetchMoreVideos action
   if (request.action === 'fetchMoreVideos') {
     chrome.storage.local.get(['userToken', 'likedVideos'], async (result) => {
       if (!result.userToken) {
@@ -307,8 +307,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             };
           }).filter(Boolean);
           
-          // Add to our collection
-          allVideos = [...allVideos, ...pageVideos];
+          // Add only new videos to our collection to avoid duplicates
+          const existingIds = new Set(allVideos.map(v => v.id));
+          const newVideos = pageVideos.filter(v => !existingIds.has(v.id));
+          allVideos = [...allVideos, ...newVideos];
           
           // Check if there are more pages
           nextPageToken = playlistData.nextPageToken;
