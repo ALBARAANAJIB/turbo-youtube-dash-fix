@@ -61,7 +61,7 @@ function showToast(message, count) {
     margin-left: 15px;
     text-decoration: none;
     font-weight: 500;
-    background-color: #ea384c;
+    background-color: #9b87f5;
     border: none;
     border-radius: 4px;
     padding: 6px 12px;
@@ -134,105 +134,213 @@ function injectFetchButton() {
   const existingButton = document.getElementById('youtube-enhancer-fetch-button');
   if (existingButton) existingButton.remove();
   
-  // Wait for the Play all / Shuffle area to be available
-  const checkForButtonArea = setInterval(() => {
-    // Look for the container that holds the Play all and Shuffle buttons
-    const buttonContainer = document.querySelector('ytd-playlist-header-renderer #top-level-buttons-computed');
+  // Try multiple placement strategies for better reliability
+  const placeButtonInUI = () => {
+    // Strategy 1: Look for play all / shuffle container
+    const playAllContainer = document.querySelector('ytd-playlist-header-renderer #top-level-buttons-computed');
     
-    if (buttonContainer) {
-      clearInterval(checkForButtonArea);
-      
-      // Create a button that matches YouTube's styling
-      const fetchButton = document.createElement('button');
-      fetchButton.id = 'youtube-enhancer-fetch-button';
-      fetchButton.textContent = 'Fetch My Liked Videos';
-      fetchButton.className = 'yt-spec-button-shape-next yt-spec-button-shape-next--filled yt-spec-button-shape-next--call-to-action';
-      fetchButton.style.cssText = `
-        background-color: #ea384c;
-        color: white;
-        border: none;
-        border-radius: 18px;
-        padding: 0 16px;
-        height: 36px;
-        font-size: 14px;
-        font-weight: 500;
-        margin-left: 8px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: background-color 0.2s;
-      `;
-      
-      // Add hover effect
-      fetchButton.addEventListener('mouseenter', () => {
-        fetchButton.style.backgroundColor = '#d62d3c';
-      });
-      
-      fetchButton.addEventListener('mouseleave', () => {
-        fetchButton.style.backgroundColor = '#ea384c';
-      });
-      
-      // Add click event
-      fetchButton.addEventListener('click', () => {
-        // Show loading state
-        fetchButton.textContent = 'Fetching...';
-        fetchButton.disabled = true;
-        fetchButton.style.opacity = '0.7';
-        
-        // Send message to background script
-        chrome.runtime.sendMessage({ action: 'fetchLikedVideos' }, (response) => {
-          // Reset button
-          fetchButton.textContent = 'Fetch My Liked Videos';
-          fetchButton.disabled = false;
-          fetchButton.style.opacity = '1';
-          
-          if (!response || !response.success) {
-            // Show error temporarily
-            fetchButton.textContent = 'Error. Try Again';
-            setTimeout(() => {
-              fetchButton.textContent = 'Fetch My Liked Videos';
-            }, 3000);
-          }
-        });
-      });
-      
-      // Append button to YouTube's button container, right after Play all and Shuffle
-      buttonContainer.appendChild(fetchButton);
-      console.log('Button injected successfully in the proper location');
+    // Strategy 2: Alternative placement if first strategy fails
+    const alternativeContainer = document.querySelector('ytd-playlist-header-renderer #menu-container');
+    
+    // Strategy 3: Last resort - the entire header section
+    const headerContainer = document.querySelector('ytd-playlist-header-renderer');
+    
+    let targetContainer = playAllContainer || alternativeContainer || headerContainer;
+    
+    if (!targetContainer) {
+      console.log('Could not find a suitable container for button placement');
+      return false;
     }
-  }, 1000);
+    
+    // Create a button that matches YouTube's styling
+    const fetchButton = document.createElement('button');
+    fetchButton.id = 'youtube-enhancer-fetch-button';
+    fetchButton.textContent = 'Fetch My Liked Videos';
+    
+    // Apply YouTube-like styling with our custom purple theme
+    fetchButton.style.cssText = `
+      background-color: #9b87f5;
+      color: white;
+      border: none;
+      border-radius: 18px;
+      padding: 0 16px;
+      height: 36px;
+      font-size: 14px;
+      font-weight: 500;
+      margin-left: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    `;
+    
+    // Add hover effect
+    fetchButton.addEventListener('mouseenter', () => {
+      fetchButton.style.backgroundColor = '#7E69AB';
+      fetchButton.style.transform = 'translateY(-1px)';
+      fetchButton.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+    });
+    
+    fetchButton.addEventListener('mouseleave', () => {
+      fetchButton.style.backgroundColor = '#9b87f5';
+      fetchButton.style.transform = 'translateY(0)';
+      fetchButton.style.boxShadow = '0 1px 2px rgba(0,0,0,0.1)';
+    });
+    
+    // Add active effect
+    fetchButton.addEventListener('mousedown', () => {
+      fetchButton.style.transform = 'translateY(1px)';
+      fetchButton.style.boxShadow = '0 0 2px rgba(0,0,0,0.2)';
+    });
+    
+    fetchButton.addEventListener('mouseup', () => {
+      fetchButton.style.transform = 'translateY(-1px)';
+      fetchButton.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+    });
+    
+    // Add click event
+    fetchButton.addEventListener('click', () => {
+      // Show loading state
+      fetchButton.textContent = 'Fetching...';
+      fetchButton.disabled = true;
+      fetchButton.style.opacity = '0.7';
+      
+      // Send message to background script
+      chrome.runtime.sendMessage({ action: 'fetchLikedVideos' }, (response) => {
+        // Reset button
+        fetchButton.textContent = 'Fetch My Liked Videos';
+        fetchButton.disabled = false;
+        fetchButton.style.opacity = '1';
+        
+        if (!response || !response.success) {
+          // Show error temporarily
+          fetchButton.textContent = 'Error. Try Again';
+          setTimeout(() => {
+            fetchButton.textContent = 'Fetch My Liked Videos';
+          }, 3000);
+        }
+      });
+    });
+    
+    // If it's the play all container (our preferred location)
+    if (targetContainer === playAllContainer) {
+      // Try to place button after existing buttons
+      targetContainer.appendChild(fetchButton);
+    } else if (targetContainer === alternativeContainer) {
+      // Insert before the container for better positioning
+      targetContainer.parentNode.insertBefore(fetchButton, targetContainer);
+    } else {
+      // Last resort - just append to the header
+      const buttonsDiv = document.createElement('div');
+      buttonsDiv.style.cssText = `
+        margin: 16px 0;
+        display: flex;
+      `;
+      buttonsDiv.appendChild(fetchButton);
+      targetContainer.appendChild(buttonsDiv);
+    }
+    
+    console.log('Button injected successfully');
+    return true;
+  };
   
-  // Safety timeout - stop checking after 30 seconds
-  setTimeout(() => clearInterval(checkForButtonArea), 30000);
+  // Try to place the button immediately
+  if (!placeButtonInUI()) {
+    // If initial placement fails, retry with increasing delays
+    const retryTimes = [500, 1000, 2000, 3000, 5000];
+    retryTimes.forEach(delay => {
+      setTimeout(() => {
+        if (!document.getElementById('youtube-enhancer-fetch-button')) {
+          placeButtonInUI();
+        }
+      }, delay);
+    });
+  }
 }
 
-// Handle URL changes (YouTube is a SPA)
+// Enhanced URL change detection with mutation observer
 function handleUrlChange() {
   let lastUrl = location.href;
   
-  // Function to check and inject button if needed
+  // Function to check and inject button when needed
   const checkAndInject = () => {
     if (window.location.href.includes('playlist?list=LL')) {
       console.log('Liked videos page detected, injecting button');
+      
+      // Initial injection
       injectFetchButton();
+      
+      // Set up additional checks after page state changes
+      setTimeout(injectFetchButton, 1000);
+      setTimeout(injectFetchButton, 2500);
     }
   };
   
-  // Call once on initial load with delay to ensure YouTube has fully loaded
-  setTimeout(checkAndInject, 2000);
+  // Call once on initial load with delay
+  setTimeout(checkAndInject, 1000);
   
-  // Create an observer to watch for URL changes
-  const observer = new MutationObserver(() => {
+  // Create an observer to watch for DOM changes
+  const observer = new MutationObserver((mutations) => {
+    // Check if URL has changed
     if (lastUrl !== location.href) {
       lastUrl = location.href;
       console.log('URL changed to: ' + location.href);
-      setTimeout(checkAndInject, 2000);
+      setTimeout(checkAndInject, 1000);
+      return;
+    }
+    
+    // Check for specific mutations that could indicate content updates
+    // without full page navigation (like showing/hiding unavailable videos)
+    if (window.location.href.includes('playlist?list=LL')) {
+      let shouldReinject = false;
+      
+      for (const mutation of mutations) {
+        // Look for changes to the playlist container
+        if (mutation.target && 
+            (mutation.target.id === 'contents' || 
+             mutation.target.classList?.contains('ytd-playlist-video-list-renderer'))) {
+          shouldReinject = true;
+          break;
+        }
+        
+        // Check if any buttons changed or were added
+        if (mutation.addedNodes && mutation.addedNodes.length > 0) {
+          for (const node of mutation.addedNodes) {
+            if (node.nodeName === 'YTD-BUTTON-RENDERER' || 
+                node.nodeName === 'YTD-TOGGLE-BUTTON-RENDERER') {
+              shouldReinject = true;
+              break;
+            }
+          }
+        }
+      }
+      
+      if (shouldReinject) {
+        console.log('Detected content changes - reinjecting button');
+        setTimeout(injectFetchButton, 500);
+      }
     }
   });
   
-  // Start observing
-  observer.observe(document, { subtree: true, childList: true });
+  // Watch for both URL changes and content changes
+  observer.observe(document, { 
+    subtree: true, 
+    childList: true,
+    attributes: true,
+    attributeFilter: ['class', 'style', 'hidden']
+  });
+  
+  // Watch for YouTube's SPA navigation events
+  document.addEventListener('yt-navigate-finish', () => {
+    console.log('YouTube navigation event detected');
+    if (window.location.href.includes('playlist?list=LL')) {
+      console.log('Navigated to liked videos page');
+      setTimeout(injectFetchButton, 1000);
+      setTimeout(injectFetchButton, 2500);  // Additional safety check
+    }
+  });
 }
 
 // Initialize when DOM is fully loaded
@@ -242,23 +350,33 @@ if (document.readyState === 'loading') {
   handleUrlChange();
 }
 
-// Re-check periodically to ensure button exists
-setInterval(() => {
-  const isLikedVideosPage = window.location.href.includes('playlist?list=LL');
-  const buttonExists = document.getElementById('youtube-enhancer-fetch-button');
-  const buttonArea = document.querySelector('ytd-playlist-header-renderer #top-level-buttons-computed');
-  
-  if (isLikedVideosPage && !buttonExists && buttonArea) {
-    console.log('Periodic check: button missing, injecting');
-    injectFetchButton();
+// Add event listener for YouTube's spfprocess event (when content refreshes)
+document.addEventListener('yt-action', (event) => {
+  if (event.detail?.actionName === 'yt-append-continuation' || 
+      event.detail?.actionName === 'ytd-update-grid-state') {
+    if (window.location.href.includes('playlist?list=LL')) {
+      console.log('YouTube action detected, checking button');
+      setTimeout(injectFetchButton, 1000);
+    }
   }
-}, 5000);
+});
 
-// Re-inject button when visibility changes
+// Re-check whenever visibility changes (user comes back to the tab)
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && 
       window.location.href.includes('playlist?list=LL')) {
-    console.log('Page became visible, checking for button');
-    setTimeout(injectFetchButton, 2000);
+    console.log('Page became visible, ensuring button exists');
+    setTimeout(injectFetchButton, 1000);
   }
 });
+
+// Also set up periodic checks as a safety measure
+setInterval(() => {
+  if (window.location.href.includes('playlist?list=LL')) {
+    const buttonExists = document.getElementById('youtube-enhancer-fetch-button');
+    if (!buttonExists) {
+      console.log('Periodic check: button missing, reinjecting');
+      injectFetchButton();
+    }
+  }
+}, 5000);
