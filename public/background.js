@@ -1,3 +1,4 @@
+
 // OAuth 2.0 constants
 const CLIENT_ID = '304162096302-c470kd77du16s0lrlumobc6s8u6uleng.apps.googleusercontent.com';
 const REDIRECT_URL = chrome.identity.getRedirectURL();
@@ -19,20 +20,23 @@ const CHANNELS_ENDPOINT = `${API_BASE}/channels`;
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('Received message:', request);
   
+  // Handle authentication request
   if (request.action === 'authenticate') {
-    authenticate()
-      .then(token => getUserInfo(token))
-      .then(({token, userInfo}) => {
-        chrome.storage.local.set({ userToken: token, userInfo: userInfo });
+    (async () => {
+      try {
+        const token = await authenticate();
+        const userInfo = await getUserInfo(token);
+        await chrome.storage.local.set({ userToken: token, userInfo: userInfo });
         sendResponse({ success: true, userInfo: userInfo });
-      })
-      .catch(error => {
+      } catch (error) {
         console.error('Authentication error:', error);
         sendResponse({ success: false, error: error.message });
-      });
+      }
+    })();
     return true; // Keep the message channel open for the async response
   }
   
+  // Check authentication status
   if (request.action === 'checkAuth') {
     chrome.storage.local.get('userToken', (result) => {
       if (result.userToken) {
@@ -46,14 +50,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true; // Keep the message channel open for the async response
   }
 
+  // Fetch the user's liked videos
   if (request.action === 'fetchLikedVideos' || request.action === 'getLikedVideos') {
-    chrome.storage.local.get('userToken', async (result) => {
-      if (!result.userToken) {
-        sendResponse({ success: false, error: 'Not authenticated' });
-        return;
-      }
-
+    (async () => {
       try {
+        const result = await chrome.storage.local.get('userToken');
+        if (!result.userToken) {
+          sendResponse({ success: false, error: 'Not authenticated' });
+          return;
+        }
+
         console.log('Fetching liked videos...');
         // First get the user's "liked videos" playlist ID
         const channelResponse = await fetch(`${CHANNELS_ENDPOINT}?part=contentDetails&mine=true`, {
@@ -65,7 +71,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const channelData = await channelResponse.json();
         const likedPlaylistId = channelData.items[0].contentDetails.relatedPlaylists.likes;
         
-        // Fetch the videos from the liked playlist instead of myRating=like to get proper order
+        // Fetch the videos from the liked playlist
         const playlistResponse = await fetch(`${PLAYLIST_ITEMS_ENDPOINT}?part=snippet,contentDetails&maxResults=50&playlistId=${likedPlaylistId}`, {
           headers: { Authorization: `Bearer ${result.userToken}` }
         });
@@ -75,7 +81,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const playlistData = await playlistResponse.json();
         console.log('Playlist items fetched:', playlistData);
         
-        // Get video details (including statistics) for the playlist items
+        // Get video details for the playlist items
         const videoIds = playlistData.items.map(item => item.contentDetails.videoId).join(',');
         
         const videosResponse = await fetch(`${LIKED_VIDEOS_ENDPOINT}?part=snippet,statistics&id=${videoIds}`, {
@@ -85,7 +91,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (!videosResponse.ok) throw new Error('Failed to fetch video details');
         
         const videosData = await videosResponse.json();
-        console.log('Video details fetched:', videosData);
         
         // Map playlist items to our video objects with correct liked dates
         const videos = playlistData.items.map(item => {
@@ -110,7 +115,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }).filter(Boolean); // Remove any nulls
         
         // Store the videos locally
-        chrome.storage.local.set({ 
+        await chrome.storage.local.set({ 
           likedVideos: videos,
           nextPageToken: playlistData.nextPageToken || null,
           totalResults: playlistData.pageInfo?.totalResults || videos.length
@@ -126,7 +131,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 action: 'showToast', 
                 message: 'Videos fetched successfully!',
                 count: videos.length
-              });
+              }).catch(err => console.log('Tab may not be ready yet:', err));
             });
           }
         });
@@ -136,18 +141,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.error('Error fetching liked videos:', error);
         sendResponse({ success: false, error: error.message });
       }
-    });
+    })();
     return true; // Keep the message channel open for the async response
   }
 
+  // Handle additional videos fetch with pagination
   if (request.action === 'fetchMoreVideos') {
-    chrome.storage.local.get(['userToken', 'likedVideos'], async (result) => {
-      if (!result.userToken) {
-        sendResponse({ success: false, error: 'Not authenticated' });
-        return;
-      }
-
+    (async () => {
       try {
+        const result = await chrome.storage.local.get(['userToken', 'likedVideos']);
+        if (!result.userToken) {
+          sendResponse({ success: false, error: 'Not authenticated' });
+          return;
+        }
+
         console.log('Fetching more liked videos with page token:', request.pageToken);
         
         // Get the user's "liked videos" playlist ID
@@ -171,7 +178,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (!playlistResponse.ok) throw new Error('Failed to fetch playlist items');
         
         const playlistData = await playlistResponse.json();
-        console.log('Next page of playlist items fetched:', playlistData);
         
         // Get video details for the playlist items
         const videoIds = playlistData.items.map(item => item.contentDetails.videoId).join(',');
@@ -218,23 +224,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.error('Error fetching more videos:', error);
         sendResponse({ success: false, error: error.message });
       }
-    });
+    })();
     return true; // Keep the message channel open for the async response
   }
 
+  // Open the dashboard
   if (request.action === 'openDashboard') {
     chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') });
     return false;
   }
 
+  // Handle data export
   if (request.action === 'exportData') {
-    chrome.storage.local.get(['userToken', 'likedVideos', 'totalResults'], async (result) => {
-      if (!result.userToken) {
-        sendResponse({ success: false, error: 'Not authenticated' });
-        return;
-      }
-      
+    (async () => {
       try {
+        const result = await chrome.storage.local.get(['userToken', 'likedVideos', 'totalResults']);
+        if (!result.userToken) {
+          sendResponse({ success: false, error: 'Not authenticated' });
+          return;
+        }
+        
         // If we have videos in storage, use them as a starting point
         let allVideos = result.likedVideos || [];
         const totalLiked = result.totalResults || 0;
@@ -348,18 +357,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.error('Error exporting data:', error);
         sendResponse({ success: false, error: error.message });
       }
-    });
+    })();
     return true; // Keep the message channel open for the async response
   }
 
+  // Handle video removal from liked list
   if (request.action === 'deleteVideo') {
-    chrome.storage.local.get(['userToken', 'likedVideos'], async (result) => {
-      if (!result.userToken) {
-        sendResponse({ success: false, error: 'Not authenticated' });
-        return;
-      }
-
+    (async () => {
       try {
+        const result = await chrome.storage.local.get(['userToken', 'likedVideos']);
+        if (!result.userToken) {
+          sendResponse({ success: false, error: 'Not authenticated' });
+          return;
+        }
+
         // Call YouTube API to remove video from liked list
         const response = await fetch(`${API_BASE}/videos/rate`, {
           method: 'POST',
@@ -375,7 +386,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // Update local storage
         if (result.likedVideos) {
           const updatedVideos = result.likedVideos.filter(video => video.id !== request.videoId);
-          chrome.storage.local.set({ likedVideos: updatedVideos });
+          await chrome.storage.local.set({ likedVideos: updatedVideos });
         }
         
         sendResponse({ success: true });
@@ -383,9 +394,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.error('Error deleting video:', error);
         sendResponse({ success: false, error: error.message });
       }
-    });
+    })();
     return true; // Keep the message channel open for the async response
   }
+
+  // If no handlers above matched, return false to indicate we won't call sendResponse
+  return false;
 });
 
 // Function to authenticate with YouTube
@@ -434,7 +448,7 @@ async function getUserInfo(token) {
     }
     
     const userInfo = await response.json();
-    return { token, userInfo };
+    return userInfo;
   } catch (error) {
     console.error('Error getting user info:', error);
     throw error;
