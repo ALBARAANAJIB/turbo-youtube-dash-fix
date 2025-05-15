@@ -1,3 +1,4 @@
+
 // Listen for messages from the background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'showToast') {
@@ -141,16 +142,16 @@ function injectButtons() {
   
   // Try multiple placement strategies for better reliability
   const placeButtonsInUI = () => {
-    // Look for the Play all / Shuffle button row container
-    const playButtonsRow = document.querySelector('ytd-playlist-header-renderer #top-level-buttons-computed');
+    // Strategy 1: Find the Play all and Shuffle buttons container
+    const playAllContainer = document.querySelector('ytd-playlist-header-renderer #top-level-buttons-computed');
     
-    // Find the playlist header details section
-    const headerDetails = document.querySelector('ytd-playlist-header-renderer #header-details');
+    // Strategy 2: Alternative placement if first strategy fails
+    const alternativeContainer = document.querySelector('ytd-playlist-header-renderer #menu-container');
     
-    // Fallback to the entire header section
+    // Strategy 3: Last resort - the entire header section
     const headerContainer = document.querySelector('ytd-playlist-header-renderer');
     
-    let targetContainer = headerDetails || playButtonsRow || headerContainer;
+    let targetContainer = playAllContainer || alternativeContainer || headerContainer;
     
     if (!targetContainer) {
       console.log('Could not find a suitable container for button placement');
@@ -165,14 +166,15 @@ function injectButtons() {
       flex-direction: column;
       gap: 10px;
       margin-top: 16px;
-      margin-bottom: 16px;
       width: 100%;
       max-width: 300px;
     `;
     
-    // Create fetch and export buttons with improved YouTube styling
-    const fetchButton = createYouTubeButton('Fetch My Liked Videos', 'youtube-enhancer-fetch-button');
-    const exportButton = createYouTubeButton('Export Videos', 'youtube-enhancer-export-button');
+    // Create fetch button with YouTube-aligned styling
+    const fetchButton = createYouTubeIntegratedButton('Fetch My Liked Videos', 'youtube-enhancer-fetch-button');
+    
+    // Create export button with YouTube-aligned styling
+    const exportButton = createYouTubeIntegratedButton('Export Videos', 'youtube-enhancer-export-button');
     
     // Add click event for fetch button
     fetchButton.addEventListener('click', () => {
@@ -226,33 +228,33 @@ function injectButtons() {
     buttonContainer.appendChild(fetchButton);
     buttonContainer.appendChild(exportButton);
     
-    // Look for the metadata line (below title section)
-    const metadataLine = document.querySelector('ytd-playlist-metadata-header-renderer #metadata-line');
+    // Look for the Play all / Shuffle button row
+    const playShuffleRow = document.querySelector('ytd-playlist-header-renderer #top-row-buttons');
     
-    if (metadataLine) {
-      // Insert after the metadata line for better spacing
-      metadataLine.parentNode.insertBefore(buttonContainer, metadataLine.nextSibling);
-    } else if (headerDetails) {
-      // If we found the header details but not metadata line, append to the end
-      headerDetails.appendChild(buttonContainer);
+    if (playShuffleRow) {
+      // Insert after the play/shuffle buttons
+      playShuffleRow.parentNode.insertBefore(buttonContainer, playShuffleRow.nextSibling);
+    } else if (targetContainer === playAllContainer) {
+      // If we found the playAllContainer but not the row, insert after the container
+      targetContainer.parentNode.insertBefore(buttonContainer, targetContainer.nextSibling);
     } else {
-      // Last resort - just append to the target container
+      // Last resort - just append to the header
       targetContainer.appendChild(buttonContainer);
     }
     
-    console.log('Buttons injected successfully with improved YouTube styling');
+    console.log('Buttons injected successfully with YouTube-integrated styling');
     return true;
   };
   
-  // Helper function to create buttons that match YouTube's design system
-  function createYouTubeButton(text, id) {
+  // Helper function to create buttons that blend well with YouTube's UI
+  function createYouTubeIntegratedButton(text, id) {
     const button = document.createElement('button');
     button.id = id;
     button.textContent = text;
     
-    // Apply YouTube's design system styling
+    // Apply YouTube-like styling that's intuitive and smooth
     button.style.cssText = `
-      background-color: #065fd4;
+      background-color: #2f7cf7;
       color: white;
       border: none;
       border-radius: 18px;
@@ -264,37 +266,34 @@ function injectButtons() {
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: all 0.15s ease;
+      transition: all 0.2s ease;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
       width: 100%;
       font-family: 'Roboto', Arial, sans-serif;
     `;
     
     // Add hover effect
     button.addEventListener('mouseenter', () => {
-      button.style.backgroundColor = '#0b57be';
+      button.style.backgroundColor = '#1b6fe8';
+      button.style.transform = 'translateY(-1px)';
+      button.style.boxShadow = '0 2px 5px rgba(0,0,0,0.15)';
     });
     
     button.addEventListener('mouseleave', () => {
-      button.style.backgroundColor = '#065fd4';
-    });
-    
-    // Add focus styling
-    button.addEventListener('focus', () => {
-      button.style.outline = '2px solid rgba(6, 95, 212, 0.5)';
-      button.style.outlineOffset = '2px';
-    });
-    
-    button.addEventListener('blur', () => {
-      button.style.outline = 'none';
+      button.style.backgroundColor = '#2f7cf7';
+      button.style.transform = 'translateY(0)';
+      button.style.boxShadow = '0 1px 2px rgba(0,0,0,0.1)';
     });
     
     // Add active effect
     button.addEventListener('mousedown', () => {
-      button.style.transform = 'scale(0.98)';
+      button.style.transform = 'translateY(1px)';
+      button.style.boxShadow = '0 0 2px rgba(0,0,0,0.1)';
     });
     
     button.addEventListener('mouseup', () => {
-      button.style.transform = 'scale(1)';
+      button.style.transform = 'translateY(-1px)';
+      button.style.boxShadow = '0 2px 5px rgba(0,0,0,0.15)';
     });
     
     return button;
