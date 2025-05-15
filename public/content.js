@@ -1,4 +1,3 @@
-
 // Listen for messages from the background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'showToast') {
@@ -164,17 +163,17 @@ function injectButtons() {
     buttonContainer.style.cssText = `
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      margin-top: 12px;
+      gap: 10px;
+      margin-top: 16px;
       width: 100%;
       max-width: 300px;
     `;
     
-    // Create fetch button that matches YouTube's styling
-    const fetchButton = createYouTubeStyleButton('Fetch My Liked Videos', 'youtube-enhancer-fetch-button');
+    // Create fetch button with updated styling to match dashboard
+    const fetchButton = createDashboardStyleButton('Fetch My Liked Videos', 'youtube-enhancer-fetch-button');
     
-    // Create export button that matches YouTube's styling
-    const exportButton = createYouTubeStyleButton('Export Videos', 'youtube-enhancer-export-button');
+    // Create export button with updated styling to match dashboard
+    const exportButton = createDashboardStyleButton('Export Videos', 'youtube-enhancer-export-button');
     
     // Add click event for fetch button
     fetchButton.addEventListener('click', () => {
@@ -242,24 +241,24 @@ function injectButtons() {
       targetContainer.appendChild(buttonContainer);
     }
     
-    console.log('Buttons injected successfully in vertical layout');
+    console.log('Buttons injected successfully with dashboard styling');
     return true;
   };
   
-  // Helper function to create YouTube-styled buttons
-  function createYouTubeStyleButton(text, id) {
+  // Helper function to create dashboard-styled buttons (updated to match red theme)
+  function createDashboardStyleButton(text, id) {
     const button = document.createElement('button');
     button.id = id;
     button.textContent = text;
     
-    // Apply YouTube-like styling with our custom purple theme
+    // Apply dashboard-like styling with red theme
     button.style.cssText = `
-      background-color: #9b87f5;
+      background-color: #ea384c;
       color: white;
       border: none;
-      border-radius: 18px;
+      border-radius: 8px;
       padding: 0 16px;
-      height: 36px;
+      height: 38px;
       font-size: 14px;
       font-weight: 500;
       cursor: pointer;
@@ -267,32 +266,33 @@ function injectButtons() {
       align-items: center;
       justify-content: center;
       transition: all 0.2s ease;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 5px rgba(234, 56, 76, 0.3);
       width: 100%;
+      font-family: 'Roboto', Arial, sans-serif;
     `;
     
     // Add hover effect
     button.addEventListener('mouseenter', () => {
-      button.style.backgroundColor = '#7E69AB';
+      button.style.backgroundColor = '#d31b31';
       button.style.transform = 'translateY(-1px)';
-      button.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+      button.style.boxShadow = '0 4px 8px rgba(234, 56, 76, 0.4)';
     });
     
     button.addEventListener('mouseleave', () => {
-      button.style.backgroundColor = '#9b87f5';
+      button.style.backgroundColor = '#ea384c';
       button.style.transform = 'translateY(0)';
-      button.style.boxShadow = '0 1px 2px rgba(0,0,0,0.1)';
+      button.style.boxShadow = '0 2px 5px rgba(234, 56, 76, 0.3)';
     });
     
     // Add active effect
     button.addEventListener('mousedown', () => {
       button.style.transform = 'translateY(1px)';
-      button.style.boxShadow = '0 0 2px rgba(0,0,0,0.2)';
+      button.style.boxShadow = '0 1px 3px rgba(234, 56, 76, 0.3)';
     });
     
     button.addEventListener('mouseup', () => {
       button.style.transform = 'translateY(-1px)';
-      button.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+      button.style.boxShadow = '0 4px 8px rgba(234, 56, 76, 0.4)';
     });
     
     return button;
