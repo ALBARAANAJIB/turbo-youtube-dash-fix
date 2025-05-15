@@ -1,3 +1,4 @@
+
 // Listen for messages from the background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'showToast') {
@@ -136,9 +137,12 @@ function injectButtons() {
   const existingExportButton = document.getElementById('youtube-enhancer-export-button');
   if (existingExportButton) existingExportButton.remove();
   
+  const existingButtonContainer = document.getElementById('youtube-enhancer-button-container');
+  if (existingButtonContainer) existingButtonContainer.remove();
+  
   // Try multiple placement strategies for better reliability
   const placeButtonsInUI = () => {
-    // Strategy 1: Look for play all / shuffle container
+    // Strategy 1: Find the Play all and Shuffle buttons container
     const playAllContainer = document.querySelector('ytd-playlist-header-renderer #top-level-buttons-computed');
     
     // Strategy 2: Alternative placement if first strategy fails
@@ -156,11 +160,14 @@ function injectButtons() {
     
     // Create a button container div to hold both buttons
     const buttonContainer = document.createElement('div');
+    buttonContainer.id = 'youtube-enhancer-button-container';
     buttonContainer.style.cssText = `
-      display: inline-flex;
+      display: flex;
+      flex-direction: column;
       gap: 8px;
-      margin-left: 12px;
-      align-items: center;
+      margin-top: 12px;
+      width: 100%;
+      max-width: 300px;
     `;
     
     // Create fetch button that matches YouTube's styling
@@ -221,25 +228,21 @@ function injectButtons() {
     buttonContainer.appendChild(fetchButton);
     buttonContainer.appendChild(exportButton);
     
-    // If it's the play all container (our preferred location)
-    if (targetContainer === playAllContainer) {
-      // Try to place buttons after existing buttons
-      targetContainer.appendChild(buttonContainer);
-    } else if (targetContainer === alternativeContainer) {
-      // Insert before the container for better positioning
-      targetContainer.parentNode.insertBefore(buttonContainer, targetContainer);
+    // Look for the Play all / Shuffle button row
+    const playShuffleRow = document.querySelector('ytd-playlist-header-renderer #top-row-buttons');
+    
+    if (playShuffleRow) {
+      // Insert after the play/shuffle buttons
+      playShuffleRow.parentNode.insertBefore(buttonContainer, playShuffleRow.nextSibling);
+    } else if (targetContainer === playAllContainer) {
+      // If we found the playAllContainer but not the row, insert after the container
+      targetContainer.parentNode.insertBefore(buttonContainer, targetContainer.nextSibling);
     } else {
       // Last resort - just append to the header
-      const buttonsDiv = document.createElement('div');
-      buttonsDiv.style.cssText = `
-        margin: 16px 0;
-        display: flex;
-      `;
-      buttonsDiv.appendChild(buttonContainer);
-      targetContainer.appendChild(buttonsDiv);
+      targetContainer.appendChild(buttonContainer);
     }
     
-    console.log('Buttons injected successfully');
+    console.log('Buttons injected successfully in vertical layout');
     return true;
   };
   
@@ -265,6 +268,7 @@ function injectButtons() {
       justify-content: center;
       transition: all 0.2s ease;
       box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+      width: 100%;
     `;
     
     // Add hover effect
