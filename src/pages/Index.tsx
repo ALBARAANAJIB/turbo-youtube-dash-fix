@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { MessageSquareText } from "lucide-react";
+import { MessageSquareText, Youtube, CirclePlay } from "lucide-react";
 
 const Index = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -11,6 +11,7 @@ const Index = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [apiKey, setApiKey] = useState('');
   const [showApiKeyForm, setShowApiKeyForm] = useState(false);
+  const [aiModel, setAiModel] = useState('gpt-3.5-turbo');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -19,7 +20,7 @@ const Index = () => {
     
     if (isExtension && window.chrome?.storage) {
       // Get auth status from Chrome storage
-      window.chrome.storage.local.get(['userToken', 'userInfo', 'aiApiKey'], (result) => {
+      window.chrome.storage.local.get(['userToken', 'userInfo', 'aiApiKey', 'aiModel'], (result) => {
         if (result.userToken && result.userInfo) {
           setIsAuthenticated(true);
           setUserEmail(result.userInfo.email || '');
@@ -29,6 +30,10 @@ const Index = () => {
           setApiKey(result.aiApiKey);
         } else {
           setShowApiKeyForm(true);
+        }
+        
+        if (result.aiModel) {
+          setAiModel(result.aiModel);
         }
         
         setIsLoading(false);
@@ -115,6 +120,29 @@ const Index = () => {
         } else {
           toast({
             title: "Failed to Save API Key",
+            description: "Please try again.",
+            variant: "destructive",
+          });
+        }
+      });
+    }
+  };
+
+  const handleSaveAiModel = (model) => {
+    if (window.chrome?.runtime) {
+      window.chrome.runtime.sendMessage({ 
+        action: 'saveAiModel',
+        aiModel: model
+      }, (response) => {
+        if (response && response.success) {
+          setAiModel(model);
+          toast({
+            title: "AI Model Updated",
+            description: `Now using ${model} for summaries.`,
+          });
+        } else {
+          toast({
+            title: "Failed to Update AI Model",
             description: "Please try again.",
             variant: "destructive",
           });
@@ -264,8 +292,38 @@ const Index = () => {
                           {!apiKey && " You'll need to set up your API key first."}
                         </p>
                         <p className="text-xs text-gray-500 mb-4">
-                          This feature will add a "Summarize Video" button to your YouTube video page.
+                          This feature adds a "Summarize Video" button to your YouTube video page.
                         </p>
+                        
+                        {apiKey && (
+                          <div className="mb-4">
+                            <p className="text-sm font-medium text-gray-700 mb-2">Choose AI model:</p>
+                            <div className="grid grid-cols-2 gap-2">
+                              <Button
+                                variant={aiModel === "gpt-3.5-turbo" ? "default" : "outline"} 
+                                size="sm"
+                                onClick={() => handleSaveAiModel("gpt-3.5-turbo")}
+                                className="justify-start"
+                              >
+                                <CirclePlay className="h-4 w-4 mr-2" />
+                                GPT 3.5 Turbo
+                                <span className="ml-auto text-xs opacity-70">Faster</span>
+                              </Button>
+                              
+                              <Button
+                                variant={aiModel === "gpt-4o" ? "default" : "outline"}
+                                size="sm" 
+                                onClick={() => handleSaveAiModel("gpt-4o")}
+                                className="justify-start"
+                              >
+                                <CirclePlay className="h-4 w-4 mr-2" />
+                                GPT-4o
+                                <span className="ml-auto text-xs opacity-70">Better</span>
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                        
                         <div className="flex flex-col space-y-2">
                           <Button 
                             variant={apiKey ? "default" : "secondary"}
@@ -274,14 +332,14 @@ const Index = () => {
                             onClick={() => {
                               toast({
                                 title: "AI Summary Feature Active",
-                                description: "You'll see a 'Summarize Video' button on YouTube videos.",
+                                description: "You'll see the 'Summarize Video' panel on YouTube videos.",
                               });
                             }}
                           >
                             {apiKey ? "Summarize Videos" : "API Key Required"}
                           </Button>
                           
-                          {apiKey && (
+                          {apiKey ? (
                             <Button 
                               variant="outline"
                               className="w-full"
@@ -289,7 +347,7 @@ const Index = () => {
                             >
                               Change API Key
                             </Button>
-                          )}
+                          ) : null}
                         </div>
                       </div>
                     </div>

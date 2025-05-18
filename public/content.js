@@ -1,4 +1,3 @@
-
 // Listen for messages from the background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'showToast') {
@@ -313,21 +312,339 @@ function injectButtons() {
   }
 }
 
+// Add function to inject the AI summary panel
+function injectSummaryPanel() {
+  // Check if we're on a YouTube video page
+  if (!window.location.hostname.includes('youtube.com') || 
+      !window.location.pathname.includes('/watch')) {
+    return;
+  }
+  
+  console.log('Detected YouTube video page, attempting to inject summary panel...');
+  
+  // Remove any existing panel to prevent duplicates
+  const existingPanel = document.getElementById('youtube-enhancer-ai-panel');
+  if (existingPanel) existingPanel.remove();
+  
+  // Create the panel container
+  const panel = document.createElement('div');
+  panel.id = 'youtube-enhancer-ai-panel';
+  panel.style.cssText = `
+    position: relative;
+    background-color: #f9f9f9;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    width: 100%;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    font-family: Roboto, Arial, sans-serif;
+  `;
+  
+  // Create the panel header with title and tabs
+  const header = document.createElement('div');
+  header.style.cssText = `
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  `;
+  
+  // Create the AI icon
+  const aiIcon = document.createElement('div');
+  aiIcon.innerHTML = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sparkles">
+      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path>
+      <path d="M5 3v4"></path>
+      <path d="M19 17v4"></path>
+      <path d="M3 5h4"></path>
+      <path d="M17 19h4"></path>
+    </svg>
+  `;
+  aiIcon.style.cssText = `
+    margin-right: 10px;
+    color: #9b87f5;
+  `;
+  
+  // Create the tabs container
+  const tabsContainer = document.createElement('div');
+  tabsContainer.style.cssText = `
+    display: flex;
+    background: #efefef;
+    border-radius: 20px;
+    padding: 4px;
+  `;
+  
+  // Create the "All" tab
+  const allTab = document.createElement('div');
+  allTab.textContent = 'All';
+  allTab.className = 'youtube-enhancer-tab active';
+  allTab.style.cssText = `
+    padding: 8px 16px;
+    border-radius: 16px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    background: #fff;
+    color: #0f0f0f;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  `;
+  
+  // Create the "Watched" tab
+  const watchedTab = document.createElement('div');
+  watchedTab.textContent = 'Watched';
+  watchedTab.className = 'youtube-enhancer-tab';
+  watchedTab.style.cssText = `
+    padding: 8px 16px;
+    border-radius: 16px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: #606060;
+  `;
+  
+  // Add event listeners to tabs
+  allTab.addEventListener('click', () => {
+    allTab.style.background = '#fff';
+    allTab.style.color = '#0f0f0f';
+    allTab.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+    watchedTab.style.background = 'transparent';
+    watchedTab.style.color = '#606060';
+    watchedTab.style.boxShadow = 'none';
+  });
+  
+  watchedTab.addEventListener('click', () => {
+    watchedTab.style.background = '#fff';
+    watchedTab.style.color = '#0f0f0f';
+    watchedTab.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+    allTab.style.background = 'transparent';
+    allTab.style.color = '#606060';
+    allTab.style.boxShadow = 'none';
+  });
+  
+  // Assemble the tabs
+  tabsContainer.appendChild(allTab);
+  tabsContainer.appendChild(watchedTab);
+  
+  // Create the "Summarize Video" button
+  const summaryButton = document.createElement('button');
+  summaryButton.textContent = 'Summarize Video';
+  summaryButton.style.cssText = `
+    background-color: #f1f1f1;
+    color: #0f0f0f;
+    border: none;
+    border-radius: 18px;
+    padding: 0 16px;
+    height: 36px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    margin: 8px 0;
+    transition: background-color 0.2s, transform 0.2s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  `;
+  
+  // Add hover effects to the button
+  summaryButton.addEventListener('mouseenter', () => {
+    summaryButton.style.backgroundColor = '#e5e5e5';
+  });
+  
+  summaryButton.addEventListener('mouseleave', () => {
+    summaryButton.style.backgroundColor = '#f1f1f1';
+  });
+  
+  // Add click effect
+  summaryButton.addEventListener('mousedown', () => {
+    summaryButton.style.transform = 'scale(0.98)';
+  });
+  
+  summaryButton.addEventListener('mouseup', () => {
+    summaryButton.style.transform = 'scale(1)';
+  });
+  
+  // Add the sparkles icon to the left of the button text
+  const sparklesIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  sparklesIcon.setAttribute('width', '16');
+  sparklesIcon.setAttribute('height', '16');
+  sparklesIcon.setAttribute('viewBox', '0 0 24 24');
+  sparklesIcon.setAttribute('fill', 'none');
+  sparklesIcon.setAttribute('stroke', 'currentColor');
+  sparklesIcon.setAttribute('stroke-width', '2');
+  sparklesIcon.setAttribute('stroke-linecap', 'round');
+  sparklesIcon.setAttribute('stroke-linejoin', 'round');
+  sparklesIcon.innerHTML = `
+    <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path>
+  `;
+  sparklesIcon.style.marginRight = '8px';
+  
+  summaryButton.prepend(sparklesIcon);
+  
+  // Create a container for the summary content
+  const summaryContent = document.createElement('div');
+  summaryContent.id = 'youtube-enhancer-summary-content';
+  summaryContent.style.cssText = `
+    padding: 16px;
+    border-radius: 8px;
+    background-color: #fff;
+    margin-top: 16px;
+    display: none;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  `;
+  
+  // Create a loading indicator
+  const loadingIndicator = document.createElement('div');
+  loadingIndicator.id = 'youtube-enhancer-loading';
+  loadingIndicator.style.cssText = `
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    color: #606060;
+  `;
+  
+  const spinner = document.createElement('div');
+  spinner.style.cssText = `
+    border: 3px solid rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    border-top: 3px solid #9b87f5;
+    width: 20px;
+    height: 20px;
+    margin-right: 10px;
+    animation: youtube-enhancer-spin 1s linear infinite;
+  `;
+  
+  const spinnerText = document.createElement('div');
+  spinnerText.textContent = 'Generating summary...';
+  
+  // Add animation for the spinner
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes youtube-enhancer-spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  `;
+  document.head.appendChild(style);
+  
+  loadingIndicator.appendChild(spinner);
+  loadingIndicator.appendChild(spinnerText);
+  
+  // Add click event to the summarize button
+  summaryButton.addEventListener('click', () => {
+    // Get current video ID
+    const videoId = new URLSearchParams(window.location.search).get('v');
+    if (!videoId) {
+      console.error('Could not find video ID');
+      return;
+    }
+    
+    // Show loading state
+    loadingIndicator.style.display = 'flex';
+    summaryContent.style.display = 'none';
+    
+    // Send message to background script to get summary
+    chrome.runtime.sendMessage({ 
+      action: 'summarizeVideo',
+      videoId: videoId,
+      videoTitle: document.title.replace(' - YouTube', '')
+    }, (response) => {
+      // Hide loading indicator
+      loadingIndicator.style.display = 'none';
+      
+      // Show summary content
+      summaryContent.style.display = 'block';
+      
+      if (response && response.success) {
+        // Format and display the summary
+        const summary = response.summary;
+        summaryContent.innerHTML = `
+          <h3 style="font-size: 16px; font-weight: 500; margin-bottom: 12px;">Video Summary</h3>
+          <div style="font-size: 14px; line-height: 1.5; color: #0f0f0f;">${summary}</div>
+        `;
+      } else {
+        // Show error message
+        summaryContent.innerHTML = `
+          <div style="color: #c00; font-size: 14px;">
+            <p>Could not generate summary. Please check your API key in the extension settings.</p>
+            <p style="margin-top: 8px; font-size: 13px; color: #606060;">
+              ${response?.error || 'Unknown error occurred'}
+            </p>
+          </div>
+        `;
+      }
+    });
+  });
+  
+  // Assemble the header
+  header.appendChild(aiIcon);
+  header.appendChild(tabsContainer);
+  
+  // Assemble the panel
+  panel.appendChild(header);
+  panel.appendChild(summaryButton);
+  panel.appendChild(loadingIndicator);
+  panel.appendChild(summaryContent);
+  
+  // Find the right insertion point in YouTube's UI
+  function insertSummaryPanel() {
+    // Try different selectors for better compatibility with YouTube's UI changes
+    const selectors = [
+      '#secondary-inner #related',
+      '#secondary-inner',
+      '#secondary',
+      '#below'
+    ];
+    
+    let targetContainer = null;
+    
+    for (const selector of selectors) {
+      targetContainer = document.querySelector(selector);
+      if (targetContainer) break;
+    }
+    
+    if (!targetContainer) {
+      console.log('Could not find a suitable container for panel placement');
+      return false;
+    }
+    
+    // Insert at the top of the sidebar
+    targetContainer.insertBefore(panel, targetContainer.firstChild);
+    return true;
+  }
+  
+  // Try to insert panel, retry if unsuccessful
+  if (!insertSummaryPanel()) {
+    const retryTimes = [500, 1000, 2000, 3000];
+    retryTimes.forEach(delay => {
+      setTimeout(() => {
+        if (!document.getElementById('youtube-enhancer-ai-panel')) {
+          insertSummaryPanel();
+        }
+      }, delay);
+    });
+  }
+}
+
 // Enhanced URL change detection with mutation observer
 function handleUrlChange() {
   let lastUrl = location.href;
   
-  // Function to check and inject buttons when needed
+  // Function to check and inject appropriate UI elements
   const checkAndInject = () => {
     if (window.location.href.includes('playlist?list=LL')) {
       console.log('Liked videos page detected, injecting buttons');
-      
-      // Initial injection
       injectButtons();
-      
-      // Set up additional checks after page state changes
       setTimeout(injectButtons, 1000);
       setTimeout(injectButtons, 2500);
+    }
+    
+    if (window.location.href.includes('/watch')) {
+      console.log('Video page detected, injecting summary panel');
+      injectSummaryPanel();
+      setTimeout(injectSummaryPanel, 1000);
     }
   };
   
@@ -344,44 +661,41 @@ function handleUrlChange() {
       return;
     }
     
-    // Check for specific mutations that could indicate content updates
-    // without full page navigation (like showing/hiding unavailable videos)
+    // Check for specific mutations on liked videos page
     if (window.location.href.includes('playlist?list=LL')) {
+      // ... keep existing code (liked videos page mutations handling)
+    }
+    
+    // Check for mutations on video page that might require reinserting the panel
+    if (window.location.href.includes('/watch')) {
       let shouldReinject = false;
       
       for (const mutation of mutations) {
-        // Look for changes to the playlist container
+        // Look for changes to the related videos or sidebar
         if (mutation.target && 
-            (mutation.target.id === 'contents' || 
-             mutation.target.classList?.contains('ytd-playlist-video-list-renderer'))) {
+            (mutation.target.id === 'related' || 
+             mutation.target.id === 'secondary-inner' ||
+             mutation.target.id === 'secondary')) {
           shouldReinject = true;
           break;
         }
         
-        // Check if any buttons changed or were added
+        // Check if any major layout changes happened
         if (mutation.addedNodes && mutation.addedNodes.length > 0) {
           for (const node of mutation.addedNodes) {
-            if (node.nodeName === 'YTD-BUTTON-RENDERER' || 
-                node.nodeName === 'YTD-TOGGLE-BUTTON-RENDERER') {
+            if (node.id === 'related' || 
+                node.id === 'secondary-inner' ||
+                node.id === 'secondary') {
               shouldReinject = true;
               break;
             }
           }
         }
-        
-        // Check specifically for the "Unavailable videos are hidden" alert
-        if (mutation.target && 
-            mutation.target.textContent && 
-            mutation.target.textContent.includes('Unavailable videos are')) {
-          console.log('Detected unavailable videos toggle - reinjecting buttons');
-          setTimeout(injectButtons, 500);
-          setTimeout(injectButtons, 1500);
-        }
       }
       
-      if (shouldReinject) {
-        console.log('Detected content changes - reinjecting buttons');
-        setTimeout(injectButtons, 500);
+      if (shouldReinject && !document.getElementById('youtube-enhancer-ai-panel')) {
+        console.log('Detected sidebar changes - injecting summary panel');
+        setTimeout(injectSummaryPanel, 500);
       }
     }
   });
@@ -398,11 +712,7 @@ function handleUrlChange() {
   // Watch for YouTube's SPA navigation events
   document.addEventListener('yt-navigate-finish', () => {
     console.log('YouTube navigation event detected');
-    if (window.location.href.includes('playlist?list=LL')) {
-      console.log('Navigated to liked videos page');
-      setTimeout(injectButtons, 1000);
-      setTimeout(injectButtons, 2500);  // Additional safety check
-    }
+    setTimeout(checkAndInject, 1000);
   });
 }
 
@@ -421,15 +731,26 @@ document.addEventListener('yt-action', (event) => {
       console.log('YouTube action detected, checking buttons');
       setTimeout(injectButtons, 1000);
     }
+    
+    if (window.location.href.includes('/watch')) {
+      console.log('YouTube action detected, checking summary panel');
+      setTimeout(injectSummaryPanel, 1000);
+    }
   }
 });
 
 // Re-check whenever visibility changes (user comes back to the tab)
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && 
-      window.location.href.includes('playlist?list=LL')) {
-    console.log('Page became visible, ensuring buttons exist');
-    setTimeout(injectButtons, 1000);
+  if (document.visibilityState === 'visible') {
+    if (window.location.href.includes('playlist?list=LL')) {
+      console.log('Page became visible, ensuring buttons exist');
+      setTimeout(injectButtons, 1000);
+    }
+    
+    if (window.location.href.includes('/watch')) {
+      console.log('Page became visible, ensuring summary panel exists');
+      setTimeout(injectSummaryPanel, 1000);
+    }
   }
 });
 
@@ -441,6 +762,14 @@ setInterval(() => {
     if (!fetchButtonExists || !exportButtonExists) {
       console.log('Periodic check: buttons missing, reinjecting');
       injectButtons();
+    }
+  }
+  
+  if (window.location.href.includes('/watch')) {
+    const panelExists = document.getElementById('youtube-enhancer-ai-panel');
+    if (!panelExists) {
+      console.log('Periodic check: summary panel missing, reinjecting');
+      injectSummaryPanel();
     }
   }
 }, 5000);
