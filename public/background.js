@@ -398,6 +398,78 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true; // Keep the message channel open for the async response
   }
 
+  // Handle video summarization
+  if (request.action === 'summarizeVideo') {
+    (async () => {
+      try {
+        // Get API key for the AI service
+        const apiKey = await getAiApiKey();
+        
+        if (!apiKey) {
+          // No API key found, prompt the user to enter one
+          chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+            if (tabs.length > 0) {
+              chrome.tabs.sendMessage(tabs[0].id, {
+                action: 'promptForApiKey',
+                service: 'OpenAI'
+              });
+            }
+          });
+          
+          sendResponse({ 
+            success: false, 
+            error: 'No API key found. Please enter your AI service API key.' 
+          });
+          return;
+        }
+        
+        // Get video transcript if available
+        const transcript = await getVideoTranscript(request.videoId);
+        
+        // Send video info to the AI service for summarization
+        const summary = await generateVideoSummary(
+          transcript || request.videoTitle,
+          request.videoTitle,
+          request.channelTitle,
+          apiKey
+        );
+        
+        // Store the summary in local storage
+        await storeVideoSummary(request.videoId, summary);
+        
+        // Send the summary back to the content script
+        chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+          if (tabs.length > 0) {
+            chrome.tabs.sendMessage(tabs[0].id, {
+              action: 'displaySummary',
+              summary: summary
+            });
+          }
+        });
+        
+        sendResponse({ success: true, summary: summary });
+      } catch (error) {
+        console.error('Error summarizing video:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true; // Keep the message channel open for the async response
+  }
+  
+  // Handle saving the AI API key
+  if (request.action === 'saveApiKey') {
+    (async () => {
+      try {
+        await chrome.storage.local.set({ aiApiKey: request.apiKey });
+        sendResponse({ success: true });
+      } catch (error) {
+        console.error('Error saving API key:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true; // Keep the message channel open for the async response
+  }
+
   // If no handlers above matched, return false to indicate we won't call sendResponse
   return false;
 });
@@ -451,6 +523,78 @@ async function getUserInfo(token) {
     return userInfo;
   } catch (error) {
     console.error('Error getting user info:', error);
+    throw error;
+  }
+}
+
+// Get saved AI API key
+async function getAiApiKey() {
+  const result = await chrome.storage.local.get('aiApiKey');
+  return result.aiApiKey || null;
+}
+
+// Get video transcript (if available)
+async function getVideoTranscript(videoId) {
+  // This is a placeholder function. In a real implementation,
+  // you would use YouTube's captions API or another service to get the transcript.
+  // This requires additional permissions and potentially a server component.
+  return null;
+}
+
+// Generate video summary using an AI service
+async function generateVideoSummary(text, title, channelTitle, apiKey) {
+  try {
+    // For now, we'll use OpenAI's API as an example
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: "gpt-3.5-turbo",
+        messages: [
+          {
+            role: "system",
+            content: "You are a helpful assistant that summarizes YouTube videos. Provide a concise summary with key points and takeaways."
+          },
+          {
+            role: "user",
+            content: `Please summarize this YouTube video titled "${title}" by ${channelTitle}. ${text ? 'Here is the transcript or content to summarize: ' + text : 'No transcript available, summarize based on the title.'}`
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 500
+      })
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(`AI API Error: ${error.error?.message || 'Unknown error'}`);
+    }
+    
+    const result = await response.json();
+    return result.choices[0].message.content;
+  } catch (error) {
+    console.error('Error generating summary:', error);
+    throw new Error(`Failed to generate summary: ${error.message}`);
+  }
+}
+
+// Store video summary in local storage
+async function storeVideoSummary(videoId, summary) {
+  try {
+    const result = await chrome.storage.local.get('videoSummaries');
+    const summaries = result.videoSummaries || {};
+    
+    summaries[videoId] = {
+      summary,
+      timestamp: new Date().toISOString()
+    };
+    
+    await chrome.storage.local.set({ videoSummaries: summaries });
+  } catch (error) {
+    console.error('Error storing summary:', error);
     throw error;
   }
 }
