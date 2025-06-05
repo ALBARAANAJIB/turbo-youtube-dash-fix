@@ -1,6 +1,5 @@
-
 import { useState, useEffect } from 'react';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { MessageSquareText, Youtube, CirclePlay } from "lucide-react";
@@ -9,10 +8,9 @@ const Index = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userEmail, setUserEmail] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [apiKey, setApiKey] = useState('');
+  const [apiKeySet, setApiKeySet] = useState(true); // Set to true since we use a fixed key now
   const [showApiKeyForm, setShowApiKeyForm] = useState(false);
-  const [aiModel, setAiModel] = useState('gpt-3.5-turbo');
-  const { toast } = useToast();
+  const [aiModel, setAiModel] = useState('standard');
 
   useEffect(() => {
     // Check if this is running in a Chrome extension context
@@ -26,11 +24,9 @@ const Index = () => {
           setUserEmail(result.userInfo.email || '');
         }
         
-        if (result.aiApiKey) {
-          setApiKey(result.aiApiKey);
-        } else {
-          setShowApiKeyForm(true);
-        }
+        // API key is now fixed in the code (AIzaSyDxQpk6jmBsM5lsGdzRJKokQkwSVTk5sRg)
+        setApiKeySet(true);
+        setShowApiKeyForm(false);
         
         if (result.aiModel) {
           setAiModel(result.aiModel);
@@ -40,13 +36,11 @@ const Index = () => {
       });
     } else {
       // Web version - show message that this is meant for Chrome extension
-      toast({
-        title: "Chrome Extension Required",
-        description: "This application is designed to run as a Chrome extension.",
-      });
+      toast("Chrome Extension Required", 
+        { description: "This application is designed to run as a Chrome extension." });
       setIsLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   const handleAuth = () => {
     if (window.chrome?.runtime) {
@@ -55,16 +49,11 @@ const Index = () => {
           setIsAuthenticated(true);
           setUserEmail(response.userInfo?.email || '');
           
-          toast({
-            title: "Authentication Successful",
-            description: "You are now signed in with YouTube.",
-          });
+          toast("Authentication Successful", 
+            { description: "You are now signed in with YouTube." });
         } else {
-          toast({
-            title: "Authentication Failed",
-            description: "Please try again.",
-            variant: "destructive",
-          });
+          toast("Authentication Failed", 
+            { description: "Please try again." });
         }
       });
     }
@@ -78,16 +67,11 @@ const Index = () => {
         setIsLoading(false);
         
         if (response && response.success) {
-          toast({
-            title: "Videos Fetched",
-            description: `${response.count} videos have been fetched from your YouTube account.`,
-          });
+          toast("Videos Fetched", 
+            { description: `${response.count} videos have been fetched from your YouTube account.` });
         } else {
-          toast({
-            title: "Failed to Fetch Videos",
-            description: "Please try again or check your connection.",
-            variant: "destructive",
-          });
+          toast("Failed to Fetch Videos", 
+            { description: "Please try again or check your connection." });
         }
       });
     }
@@ -97,34 +81,8 @@ const Index = () => {
     if (window.chrome?.runtime && window.chrome?.tabs) {
       window.chrome.tabs.create({ url: window.chrome.runtime.getURL('dashboard.html') });
     } else {
-      toast({
-        title: "Extension Context Required",
-        description: "This feature is only available in the Chrome extension.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleSaveApiKey = () => {
-    if (window.chrome?.runtime) {
-      window.chrome.runtime.sendMessage({ 
-        action: 'saveApiKey',
-        apiKey: apiKey
-      }, (response) => {
-        if (response && response.success) {
-          toast({
-            title: "API Key Saved",
-            description: "Your AI service API key has been saved.",
-          });
-          setShowApiKeyForm(false);
-        } else {
-          toast({
-            title: "Failed to Save API Key",
-            description: "Please try again.",
-            variant: "destructive",
-          });
-        }
-      });
+      toast("Extension Context Required", 
+        { description: "This feature is only available in the Chrome extension." });
     }
   };
 
@@ -136,16 +94,11 @@ const Index = () => {
       }, (response) => {
         if (response && response.success) {
           setAiModel(model);
-          toast({
-            title: "AI Model Updated",
-            description: `Now using ${model} for summaries.`,
-          });
+          toast("AI Model Updated", 
+            { description: `Now using ${model === 'advanced' ? 'advanced' : 'Gemini 2.5 Flash'} model for summaries.` });
         } else {
-          toast({
-            title: "Failed to Update AI Model",
-            description: "Please try again.",
-            variant: "destructive",
-          });
+          toast("Failed to Update AI Model", 
+            { description: "Please try again." });
         }
       });
     }
@@ -157,10 +110,8 @@ const Index = () => {
         setIsAuthenticated(false);
         setUserEmail('');
         
-        toast({
-          title: "Signed Out",
-          description: "You have been signed out of your YouTube account.",
-        });
+        toast("Signed Out", 
+          { description: "You have been signed out of your YouTube account." });
       });
     }
   };
@@ -210,32 +161,6 @@ const Index = () => {
                 <span className="ml-3 text-gray-700">{userEmail}</span>
               </div>
 
-              {showApiKeyForm && (
-                <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-                  <h3 className="text-lg font-medium text-blue-800 mb-2">AI Summary Setup</h3>
-                  <p className="text-sm text-blue-600 mb-4">
-                    To use the AI summary feature, please enter your OpenAI API key. 
-                    You can get one from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="underline">OpenAI's website</a>.
-                  </p>
-                  <div className="flex flex-col space-y-2">
-                    <input 
-                      type="text" 
-                      placeholder="Enter your OpenAI API key"
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <Button 
-                      onClick={handleSaveApiKey}
-                      disabled={!apiKey}
-                      className="w-full"
-                    >
-                      Save API Key
-                    </Button>
-                  </div>
-                </div>
-              )}
-
               <Tabs defaultValue="videos" className="w-full">
                 <TabsList className="grid w-full grid-cols-2 mb-4">
                   <TabsTrigger value="videos">Video Management</TabsTrigger>
@@ -265,10 +190,8 @@ const Index = () => {
                       onClick={() => {
                         if (window.chrome?.runtime) {
                           window.chrome.runtime.sendMessage({ action: 'exportData' });
-                          toast({
-                            title: "Export Started",
-                            description: "Your data export has started. Please wait a moment."
-                          });
+                          toast("Export Started", 
+                            { description: "Your data export has started. Please wait a moment." });
                         }
                       }}
                       className="w-full flex justify-between items-center px-4 py-3 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none"
@@ -286,84 +209,64 @@ const Index = () => {
                         <MessageSquareText className="h-5 w-5 text-white" />
                       </div>
                       <div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-1">AI Video Summaries</h3>
+                        <h3 className="text-lg font-medium text-gray-900 mb-1">Smart Video Summaries</h3>
                         <p className="text-sm text-gray-600 mb-4">
-                          Get instant AI-generated summaries of any YouTube video you're watching.
-                          {!apiKey && " You'll need to set up your API key first."}
+                          Get instant AI-generated summaries of any YouTube video in the video's original language.
                         </p>
                         <p className="text-xs text-gray-500 mb-4">
-                          This feature adds a "Summarize Video" button to your YouTube video page.
+                          This feature adds a "Summarize Video" button to YouTube video pages and provides intelligent summaries in Arabic, English, Spanish, German, and more.
                         </p>
                         
-                        {apiKey && (
-                          <div className="mb-4">
-                            <p className="text-sm font-medium text-gray-700 mb-2">Choose AI model:</p>
-                            <div className="grid grid-cols-2 gap-2">
-                              <Button
-                                variant={aiModel === "gpt-3.5-turbo" ? "default" : "outline"} 
-                                size="sm"
-                                onClick={() => handleSaveAiModel("gpt-3.5-turbo")}
-                                className="justify-start"
-                              >
-                                <CirclePlay className="h-4 w-4 mr-2" />
-                                GPT 3.5 Turbo
-                                <span className="ml-auto text-xs opacity-70">Faster</span>
-                              </Button>
-                              
-                              <Button
-                                variant={aiModel === "gpt-4o" ? "default" : "outline"}
-                                size="sm" 
-                                onClick={() => handleSaveAiModel("gpt-4o")}
-                                className="justify-start"
-                              >
-                                <CirclePlay className="h-4 w-4 mr-2" />
-                                GPT-4o
-                                <span className="ml-auto text-xs opacity-70">Better</span>
-                              </Button>
+                        <div className="mb-4">
+                          <p className="text-sm font-medium text-gray-700 mb-2">Available summarization modes:</p>
+                          <div className="grid grid-cols-1 gap-2">
+                            <div className="flex items-center justify-between p-2 bg-white rounded border">
+                              <div>
+                                <div className="font-medium text-sm">Quick Summary</div>
+                                <div className="text-xs text-gray-500">2-3 min read • Brief overview</div>
+                              </div>
+                              <CirclePlay className="h-4 w-4 text-green-500" />
+                            </div>
+                            
+                            <div className="flex items-center justify-between p-2 bg-white rounded border">
+                              <div>
+                                <div className="font-medium text-sm">Detailed Summary</div>
+                                <div className="text-xs text-gray-500">5-7 min read • Comprehensive analysis</div>
+                              </div>
+                              <CirclePlay className="h-4 w-4 text-blue-500" />
                             </div>
                           </div>
-                        )}
+                        </div>
                         
                         <div className="flex flex-col space-y-2">
                           <Button 
-                            variant={apiKey ? "default" : "secondary"}
+                            variant="default"
                             className="w-full"
-                            disabled={!apiKey}
                             onClick={() => {
-                              toast({
-                                title: "AI Summary Feature Active",
-                                description: "You'll see the 'Summarize Video' panel on YouTube videos.",
-                              });
+                              toast("AI Summary Feature Active", 
+                                { description: "You'll see the summarization panel on YouTube videos with 2 reliable modes." });
                             }}
                           >
-                            {apiKey ? "Summarize Videos" : "API Key Required"}
+                            Summarize Videos with Gemini
                           </Button>
                           
-                          {apiKey ? (
-                            <Button 
-                              variant="outline"
-                              className="w-full"
-                              onClick={() => setShowApiKeyForm(true)}
-                            >
-                              Change API Key
-                            </Button>
-                          ) : null}
+                          <div className="text-xs p-2 rounded-md border text-emerald-700 bg-emerald-50 border-emerald-100">
+                            ✨ Simplified with 2 reliable modes for consistent language detection!
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
                   
-                  {apiKey && (
-                    <div className="bg-gray-50 p-4 rounded border border-gray-200 mt-4">
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">Coming soon:</h4>
-                      <ul className="text-xs text-gray-600 space-y-2 list-disc pl-5">
-                        <li>Batch summarization of multiple videos</li>
-                        <li>Custom summary formats and lengths</li>
-                        <li>Topic extraction and keyword analysis</li>
-                        <li>Video recommendations based on your interests</li>
-                      </ul>
-                    </div>
-                  )}
+                  <div className="bg-gray-50 p-4 rounded border border-gray-200 mt-4">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Recent improvements:</h4>
+                    <ul className="text-xs text-gray-600 space-y-2 list-disc pl-5">
+                      <li>Simplified to 2 reliable summarization modes</li>
+                      <li>Ultra-consistent language detection and matching</li>
+                      <li>Better handling of long videos (40+ minutes)</li>
+                      <li>Removed problematic prompts causing mixed languages</li>
+                    </ul>
+                  </div>
                 </TabsContent>
               </Tabs>
 

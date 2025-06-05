@@ -3,12 +3,16 @@
   "manifest_version": 3,
   "name": "YouTube Enhancer",
   "version": "1.0.0",
-  "description": "Enhance your YouTube experience with easy liked video management",
+  "description": "Enhance your YouTube experience with easy liked video management and AI-powered summarization",
   "icons": {
     "16": "icons/icon.png",
     "48": "icons/icon.png",
     "128": "icons/icon.png"
+  
   },
+
+  "key":"MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAypr2wCZv/Kep7UcuysmN6MBHVqsWG3oYq8pk4SjBhWE2NAZE7n4kInSh4pQEWxiWt2hM5dZQuexwfKAMJNaZ0HxdmTUy3ExupUtWsnZBnJ4SBY0Ra3zanDN7Sohpa+3A98SXl8hWVbRvqhwcdN3vqhbvocc//GkdcpqmoVXoVC5AU3YQwsqrFl+8ULSmGoE97BbEnAHK1b1daCIIpWWcEHNxmJmCW1Twg7XjOcEB+BllTRboXAnEU0aNdSv2ZcueA6wQySeHZLinIVZXq8Z75GhM5yJWr6wTMJqLeVOeS5p/fxMdv+wwK9GA9TxVc/4ehzSk8SIlFOsc5/c5R9bUWQIDAQAB",
+
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -18,8 +22,7 @@
     }
   },
   "background": {
-    "service_worker": "background.js",
-    "type": "module"
+    "service_worker": "background.js"
   },
   "content_scripts": [
     {
@@ -32,10 +35,11 @@
     "storage",
     "identity",
     "tabs",
-    "downloads"
+    "downloads",
+    "scripting"
   ],
   "oauth2": {
-    "client_id": "304162096302-c470kd77du16s0lrlumobc6s8u6uleng.apps.googleusercontent.com",
+    "client_id": "304162096302-4mpo9949jogs1ptnpmc0s4ipkq53dbsm.apps.googleusercontent.com",
     "scopes": [
       "https://www.googleapis.com/auth/youtube.readonly",
       "https://www.googleapis.com/auth/youtube.force-ssl"
