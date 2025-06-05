@@ -110,7 +110,7 @@ function injectSummarizationPanel() {
            onmouseout="this.style.background='#f9fafb'; this.style.borderColor='#d1d5db'">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"/>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
           </svg>
           <span>Generate Summary</span>
         </button>
@@ -191,78 +191,76 @@ function injectSummarizationPanel() {
   });
 }
 
-// Enhanced prompts specifically designed for long video analysis like Google AI Studio
+// Enhanced prompts with better language detection
 function getAdvancedPrompt(detailLevel, isLongVideo = false, videoDuration = '') {
-  const baseInstructions = `CRITICAL: Respond ONLY in the video's spoken language. Match the language exactly.
+  // Get language detection from page metadata
+  const languageResult = detectLanguageFromPageMetadata();
+  
+  const baseInstructions = `CRITICAL LANGUAGE INSTRUCTION: You MUST respond ONLY in ${languageResult.detectedLanguage}.
 
-Language Detection Rules:
-- If video is Arabic → write EVERYTHING in Arabic
-- If video is English → write EVERYTHING in English  
-- If video is Spanish → write EVERYTHING in Spanish
-- If video is German → write EVERYTHING in German
-- If video is French → write EVERYTHING in French
-- NO ENGLISH if video is not in English. NO mixed languages.`;
+ENHANCED LANGUAGE DETECTION (Confidence: ${languageResult.confidence}):
+- Detected from sources: ${languageResult.sources.join(', ')}
+- Target language: ${languageResult.detectedLanguage}
+- Write EVERYTHING in ${languageResult.detectedLanguage} - no exceptions
+- NO mixed languages - maintain consistency throughout
+
+Special handling for music/artistic content:
+- If minimal speech, focus on visual storytelling and artistic elements
+- Describe musical style, production quality, and emotional impact
+- Comment on any available lyrics or vocal performances
+- Analyze the overall aesthetic and creative direction`;
 
   if (isLongVideo) {
     return `${baseInstructions}
 
-This is a LONG VIDEO (${videoDuration || '50+ minutes'}). You are an expert video analyst. Provide a comprehensive, well-structured summary that captures the narrative flow and key moments.
+This is a LONG VIDEO (${videoDuration || '50+ minutes'}). Provide comprehensive analysis in ${languageResult.detectedLanguage}.
 
-STRUCTURE YOUR RESPONSE LIKE THIS:
+STRUCTURE (all in ${languageResult.detectedLanguage}):
 
 **Video Overview:**
-- Brief description of content type and main theme
-- Key participants/characters involved
-- Overall context and setting
+- Content type and main theme
+- Key elements and context
 
 **Main Segments & Progression:**
-Break the video into logical segments with clear progression:
+Break into logical segments:
 
 **Early Section (0-20%):**
-- Initial setup, context, or introduction
-- Key early events or decisions
-- Important items, characters, or challenges introduced
+- Initial setup and introduction
+- Key early elements
 
 **Development Phase (20-60%):**
-- Major events and turning points
-- Character/gameplay progression
-- Key challenges faced and overcome
-- Important discoveries or realizations
+- Major developments and progression
+- Important moments and changes
 
 **Climax & Resolution (60-100%):**
-- Escalation of main conflict or challenge
-- Critical moments and decisions
-- Final outcomes and resolutions
-- Overall results and conclusions
+- Peak moments and conclusion
+- Final outcomes and impact
 
 **Key Highlights:**
-- Most significant moments or quotes
-- Impressive achievements or failures
-- Memorable interactions or reactions
-- Technical details if relevant
+- Most significant moments
+- Memorable elements and impact
 
 **Final Analysis:**
-- Overall performance or outcome statistics
-- Time taken, completion percentage, or other metrics
-- Lasting impact or significance of the experience
+- Overall assessment and significance
+- Lasting impact and conclusion
 
 ${detailLevel === 'quick' ? 
-  'Provide this structure in 300-400 words, focusing on main segments and key highlights.' : 
-  'Provide this structure in 600-800 words with detailed analysis of each segment and comprehensive coverage of key moments.'}
+  `Provide this structure in 300-400 words in ${languageResult.detectedLanguage}.` : 
+  `Provide this structure in 600-800 words in ${languageResult.detectedLanguage} with detailed analysis.`}
 
-Make your response engaging and narrative-driven, capturing both the content and the emotional journey. Use specific details, timestamps when mentioned, and maintain the chronological flow of events.
-
-Remember: Use ONLY the video's spoken language throughout your entire response.`;
+Remember: Use ONLY ${languageResult.detectedLanguage} throughout your entire response.`;
   }
 
   const wordCount = detailLevel === 'quick' ? '150-250' : '400-600';
   return `${baseInstructions}
 
-Watch this video and write a ${detailLevel} summary (${wordCount} words) in the EXACT same language as the video content.
+Create a ${detailLevel} summary (${wordCount} words) in ${languageResult.detectedLanguage}.
 
-${detailLevel === 'quick' ? 'Summarize the main points briefly with clear structure.' : 'Cover main topics, key points, and important details thoroughly with organized sections.'}
+${detailLevel === 'quick' ? 
+  `Summarize main points with clear structure in ${languageResult.detectedLanguage}.` : 
+  `Cover topics thoroughly with organized sections in ${languageResult.detectedLanguage}.`}
 
-Structure your response with clear headings and logical flow. Match the video language perfectly.`;
+Structure with clear headings, all in ${languageResult.detectedLanguage}.`;
 }
 
 async function summarizeVideo(videoUrl, detailLevel, loadingMessage, contentDiv, loadingDiv, summarizeBtn) {
@@ -784,3 +782,92 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   return true;
 });
+
+// Enhanced language detection function (embedded in content script)
+function detectLanguageFromPageMetadata() {
+  const sources = [];
+  let detectedLanguage = 'English';
+  let confidence = 'low';
+
+  try {
+    // Check video title
+    const titleElement = document.querySelector('h1.style-scope.ytd-watch-metadata yt-formatted-string');
+    const title = titleElement?.textContent || '';
+    
+    // Check description
+    const descriptionElement = document.querySelector('#description-inline-expander .ytd-text-inline-expander');
+    const description = descriptionElement?.textContent?.substring(0, 500) || '';
+    
+    // Check page language
+    const htmlLang = document.documentElement.lang;
+    const languageMap = {
+      'en': 'English', 'en-US': 'English', 'en-GB': 'English',
+      'de': 'German', 'de-DE': 'German',
+      'es': 'Spanish', 'es-ES': 'Spanish',
+      'fr': 'French', 'fr-FR': 'French',
+      'it': 'Italian', 'pt': 'Portuguese',
+      'ja': 'Japanese', 'ko': 'Korean',
+      'zh': 'Chinese', 'ar': 'Arabic',
+      'ru': 'Russian', 'hi': 'Hindi'
+    };
+    
+    if (htmlLang && languageMap[htmlLang]) {
+      detectedLanguage = languageMap[htmlLang];
+      sources.push('page-lang');
+      confidence = 'medium';
+    }
+    
+    // Analyze text patterns
+    const combinedText = `${title} ${description}`.toLowerCase();
+    
+    const languagePatterns = {
+      'German': {
+        patterns: [/\b(der|die|das|und|ich|du|er|sie|mit|von|zu|auf|in|für|über|durch|nach|vor|bei|um|gegen|während|seit|bis)\b/g, /[äöüß]/g],
+        weight: 2
+      },
+      'Spanish': {
+        patterns: [/\b(el|la|los|las|de|y|en|con|por|para|que|se|un|una|es|son|pero|si|no|muy|más|todo)\b/g, /[ñáéíóúü]/g],
+        weight: 2
+      },
+      'French': {
+        patterns: [/\b(le|la|les|de|du|et|en|avec|par|pour|que|se|ce|un|une|est|sont|mais|si|très|plus|tout)\b/g, /[àâäéèêëïîôùûüÿç]/g],
+        weight: 2
+      },
+      'English': {
+        patterns: [/\b(the|and|or|in|on|at|to|for|of|with|by|from|that|this|is|are|was|were|have|has|had|do|will|can|should)\b/g],
+        weight: 1
+      }
+    };
+    
+    let maxScore = 0;
+    let bestLanguage = 'English';
+    
+    for (const [lang, config] of Object.entries(languagePatterns)) {
+      let score = 0;
+      config.patterns.forEach(pattern => {
+        const matches = combinedText.match(pattern);
+        if (matches) {
+          score += matches.length * config.weight;
+        }
+      });
+      
+      if (score > maxScore) {
+        maxScore = score;
+        bestLanguage = lang;
+      }
+    }
+    
+    if (maxScore > 3) {
+      detectedLanguage = bestLanguage;
+      sources.push('text-analysis');
+      confidence = maxScore > 10 ? 'high' : 'medium';
+    }
+    
+    console.log('Language detection:', { detectedLanguage, confidence, sources, score: maxScore });
+    
+  } catch (error) {
+    console.error('Language detection error:', error);
+  }
+  
+  return { detectedLanguage, confidence, sources };
+}
