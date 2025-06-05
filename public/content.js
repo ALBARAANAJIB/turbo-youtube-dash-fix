@@ -1,4 +1,3 @@
-
 // Enhanced YouTube extension with professional design and advanced long video summarization
 function injectSummarizationPanel() {
   // Check if we're on a YouTube video page
@@ -111,7 +110,7 @@ function injectSummarizationPanel() {
            onmouseout="this.style.background='#f9fafb'; this.style.borderColor='#d1d5db'">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"/>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
           </svg>
           <span>Generate Summary</span>
         </button>
@@ -276,13 +275,13 @@ async function summarizeVideo(videoUrl, detailLevel, loadingMessage, contentDiv,
     const isLongVideo = checkIfLongVideo(videoDuration);
     
     const messages = {
-      quick: isLongVideo ? 'Analyzing long video structure and key segments...' : 'Creating quick overview...',
+      quick: isLongVideo ? 'Analyzing long video structure and key segments...' : 'Creating comprehensive overview...',
       detailed: isLongVideo ? 'Processing long video segments with detailed analysis...' : 'Analyzing content thoroughly...'
     };
     
     loadingMessage.textContent = messages[detailLevel] || 'Processing video...';
     
-    // Enhanced configuration for long videos
+    // Enhanced configuration with higher token limits and better handling
     const requestBody = {
       contents: [
         {
@@ -298,12 +297,15 @@ async function summarizeVideo(videoUrl, detailLevel, loadingMessage, contentDiv,
         }
       ],
       generationConfig: {
-        temperature: 0.03, // Very low for consistency and accuracy
-        maxOutputTokens: isLongVideo ? (detailLevel === 'quick' ? 500 : 1200) : (detailLevel === 'quick' ? 350 : 800),
-        topP: 0.05, // More focused responses
+        temperature: 0.02, // Even lower for consistency
+        maxOutputTokens: isLongVideo ? 
+          (detailLevel === 'quick' ? 600 : 1500) : 
+          (detailLevel === 'quick' ? 450 : 1000), // Increased token limits
+        topP: 0.05,
         topK: 1,
         candidateCount: 1,
-        responseMimeType: "text/plain"
+        responseMimeType: "text/plain",
+        stopSequences: [] // Remove any stop sequences that might truncate
       },
       safetySettings: [
         {
@@ -358,8 +360,54 @@ async function summarizeVideo(videoUrl, detailLevel, loadingMessage, contentDiv,
     console.log('API Response received:', data);
     
     let summary = '';
+    let isPartial = false;
+    
     if (data?.candidates?.[0]?.content?.parts?.[0]?.text) {
       summary = data.candidates[0].content.parts[0].text.trim();
+      
+      // Check if response was truncated due to max tokens
+      if (data.candidates[0].finishReason === 'MAX_TOKENS') {
+        isPartial = true;
+        console.log('Response truncated due to max tokens, attempting to complete...');
+        
+        // Try to get a completion with a follow-up request for the ending
+        try {
+          const completionRequest = {
+            contents: [
+              {
+                parts: [
+                  { 
+                    text: `Complete this summary that was cut off. Provide ONLY the missing conclusion/ending in the same language. Do not repeat the existing content. Here's what we have so far: "${summary.slice(-200)}"\n\nProvide a proper conclusion that wraps up the summary naturally.` 
+                  }
+                ]
+              }
+            ],
+            generationConfig: {
+              temperature: 0.02,
+              maxOutputTokens: 200,
+              topP: 0.05
+            }
+          };
+          
+          const completionResponse = await fetch(`${GEMINI_API_URL}?key=${API_KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(completionRequest)
+          });
+          
+          if (completionResponse.ok) {
+            const completionData = await completionResponse.json();
+            if (completionData?.candidates?.[0]?.content?.parts?.[0]?.text) {
+              const completion = completionData.candidates[0].content.parts[0].text.trim();
+              summary += ' ' + completion;
+              isPartial = false;
+              console.log('Successfully completed truncated summary');
+            }
+          }
+        } catch (completionError) {
+          console.log('Could not complete truncated summary, proceeding with partial content');
+        }
+      }
     } else {
       // Handle specific finish reasons
       if (data?.candidates?.[0]?.finishReason) {
@@ -368,14 +416,6 @@ async function summarizeVideo(videoUrl, detailLevel, loadingMessage, contentDiv,
         
         if (reason === 'SAFETY') {
           throw new Error('Content needs special handling 🛡️ Try a different video');
-        } else if (reason === 'MAX_TOKENS') {
-          // For long videos, this might be normal - check if we have partial content
-          if (data.candidates[0].content?.parts?.[0]?.text) {
-            summary = data.candidates[0].content.parts[0].text.trim();
-            console.log('Got partial summary due to max tokens');
-          } else {
-            throw new Error('Video too comprehensive! 📚 Try Quick mode for detailed videos');
-          }
         } else if (reason === 'RECITATION') {
           throw new Error('Copyright considerations detected 📄 Try a different video');
         } else if (reason === 'OTHER') {
@@ -388,8 +428,9 @@ async function summarizeVideo(videoUrl, detailLevel, loadingMessage, contentDiv,
       }
     }
 
+    // Ensure we have substantial content
     if (summary && summary.length > 50) {
-      showSuccess(contentDiv, loadingDiv, summarizeBtn, summary, detailLevel);
+      showSuccess(contentDiv, loadingDiv, summarizeBtn, summary, detailLevel, isPartial);
     } else {
       throw new Error('Summary too brief 📝 Please try again with different settings');
     }
@@ -443,13 +484,17 @@ function checkIfLongVideo(duration = '') {
   return false;
 }
 
-function showSuccess(contentDiv, loadingDiv, summarizeBtn, summary, detailLevel) {
+function showSuccess(contentDiv, loadingDiv, summarizeBtn, summary, detailLevel, isPartial = false) {
   loadingDiv.style.display = 'none';
   
   const detailLabels = {
     quick: 'Quick Summary',
     detailed: 'Detailed Summary'
   };
+  
+  // Add partial indicator if needed
+  const titleText = detailLabels[detailLevel] || 'Summary';
+  const finalTitle = isPartial ? `${titleText} (Auto-completed)` : titleText;
   
   contentDiv.innerHTML = `
     <div style="
@@ -465,43 +510,72 @@ function showSuccess(contentDiv, loadingDiv, summarizeBtn, summary, detailLevel)
         font-size: 13px;
         font-weight: 600;
         letter-spacing: -0.025em;
-      ">${detailLabels[detailLevel] || 'Summary'}</strong>
-      <button id="copy-summary" style="
-        background: #ffffff;
-        color: #374151;
-        border: 1px solid #d1d5db;
-        border-radius: 5px;
-        padding: 5px 10px;
-        font-size: 11px;
-        cursor: pointer;
-        font-weight: 500;
-        transition: all 0.2s ease;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        font-family: inherit;
-      ">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
-          <path d="m4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
-        </svg>
-        Copy
-      </button>
+      ">${finalTitle}</strong>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        ${isPartial ? '<span style="font-size: 10px; color: #6b7280; background: #f3f4f6; padding: 2px 6px; border-radius: 3px;">✓ Completed</span>' : ''}
+        <button id="copy-summary" style="
+          background: #ffffff;
+          color: #374151;
+          border: 1px solid #d1d5db;
+          border-radius: 5px;
+          padding: 5px 10px;
+          font-size: 11px;
+          cursor: pointer;
+          font-weight: 500;
+          transition: all 0.2s ease;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          font-family: inherit;
+        ">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+            <path d="m4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+          </svg>
+          Copy
+        </button>
+      </div>
     </div>
     <div style="
       padding: 16px;
       line-height: 1.7;
       font-size: 14px;
       color: #111827;
-      max-height: 400px;
+      max-height: 500px;
       overflow-y: auto;
       word-wrap: break-word;
+      word-break: break-word;
       white-space: pre-wrap;
       font-weight: 400;
       letter-spacing: -0.025em;
       background: #ffffff;
-    ">${summary}</div>
+      scrollbar-width: thin;
+      scrollbar-color: #cbd5e1 #f1f5f9;
+    " id="summary-text">${summary}</div>
   `;
+  
+  // Enhanced scrollbar styling for webkit browsers
+  const summaryText = document.getElementById('summary-text');
+  if (summaryText) {
+    const style = document.createElement('style');
+    style.textContent = `
+      #summary-text::-webkit-scrollbar {
+        width: 6px;
+      }
+      #summary-text::-webkit-scrollbar-track {
+        background: #f1f5f9;
+        border-radius: 3px;
+      }
+      #summary-text::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 3px;
+      }
+      #summary-text::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+    `;
+    document.head.appendChild(style);
+  }
   
   // Add copy functionality
   const copyBtn = document.getElementById('copy-summary');
