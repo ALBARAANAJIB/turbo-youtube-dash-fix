@@ -191,24 +191,220 @@ function injectSummarizationPanel() {
   });
 }
 
-// Enhanced prompts with better language detection
+// Enhanced language detection with multiple strategies
+function detectVideoLanguage() {
+  const sources = [];
+  let detectedLanguage = 'English';
+  let confidence = 'low';
+
+  try {
+    // Strategy 1: Check HTML lang attribute
+    const htmlLang = document.documentElement.lang;
+    const languageMap = {
+      'en': 'English', 'en-US': 'English', 'en-GB': 'English',
+      'de': 'German', 'de-DE': 'German',
+      'es': 'Spanish', 'es-ES': 'Spanish', 'es-MX': 'Spanish',
+      'fr': 'French', 'fr-FR': 'French', 'fr-CA': 'French',
+      'it': 'Italian', 'it-IT': 'Italian',
+      'pt': 'Portuguese', 'pt-BR': 'Portuguese', 'pt-PT': 'Portuguese',
+      'ja': 'Japanese', 'ja-JP': 'Japanese',
+      'ko': 'Korean', 'ko-KR': 'Korean',
+      'zh': 'Chinese', 'zh-CN': 'Chinese', 'zh-TW': 'Chinese', 'zh-HK': 'Chinese',
+      'ar': 'Arabic', 'ar-SA': 'Arabic',
+      'ru': 'Russian', 'ru-RU': 'Russian',
+      'hi': 'Hindi', 'hi-IN': 'Hindi',
+      'th': 'Thai', 'th-TH': 'Thai',
+      'vi': 'Vietnamese', 'vi-VN': 'Vietnamese',
+      'tr': 'Turkish', 'tr-TR': 'Turkish',
+      'pl': 'Polish', 'pl-PL': 'Polish',
+      'nl': 'Dutch', 'nl-NL': 'Dutch'
+    };
+    
+    if (htmlLang && languageMap[htmlLang]) {
+      detectedLanguage = languageMap[htmlLang];
+      sources.push('html-lang');
+      confidence = 'medium';
+    }
+
+    // Strategy 2: Analyze video title
+    const titleElement = document.querySelector('h1.style-scope.ytd-watch-metadata yt-formatted-string, h1 yt-formatted-string');
+    const title = titleElement?.textContent || '';
+    
+    // Strategy 3: Check video description
+    const descriptionElement = document.querySelector('#description-inline-expander .ytd-text-inline-expander, #description .content');
+    const description = descriptionElement?.textContent?.substring(0, 300) || '';
+    
+    // Strategy 4: Analyze channel information
+    const channelElement = document.querySelector('#channel-name a, .ytd-channel-name a');
+    const channelName = channelElement?.textContent || '';
+    
+    // Strategy 5: Check video captions/subtitles if available
+    const captionButtons = document.querySelectorAll('.ytp-menuitem[role="menuitemcheckbox"]');
+    let captionLanguages = [];
+    captionButtons.forEach(btn => {
+      const text = btn.textContent?.toLowerCase() || '';
+      if (text.includes('chinese') || text.includes('中文')) captionLanguages.push('Chinese');
+      if (text.includes('japanese') || text.includes('日本語')) captionLanguages.push('Japanese');
+      if (text.includes('korean') || text.includes('한국어')) captionLanguages.push('Korean');
+      if (text.includes('spanish') || text.includes('español')) captionLanguages.push('Spanish');
+      if (text.includes('french') || text.includes('français')) captionLanguages.push('French');
+      if (text.includes('german') || text.includes('deutsch')) captionLanguages.push('German');
+    });
+
+    if (captionLanguages.length > 0) {
+      detectedLanguage = captionLanguages[0];
+      sources.push('captions');
+      confidence = 'high';
+    }
+
+    // Strategy 6: Enhanced text analysis with better Unicode support
+    const combinedText = `${title} ${description} ${channelName}`.toLowerCase();
+    
+    const languagePatterns = {
+      'Chinese': {
+        patterns: [
+          /[\u4e00-\u9fff]/g, // Chinese characters
+          /[\u3400-\u4dbf]/g, // CJK Extension A
+          /\b(的|和|在|是|有|了|我|你|他|她|它|们|这|那|一个|可以|会|要|不|也|都|很|更|最)\b/g
+        ],
+        weight: 3
+      },
+      'Japanese': {
+        patterns: [
+          /[\u3040-\u309f]/g, // Hiragana
+          /[\u30a0-\u30ff]/g, // Katakana
+          /[\u4e00-\u9faf]/g, // Kanji (subset)
+          /\b(の|に|は|を|が|で|と|から|まで|より|て|だ|です|である|する|した|している)\b/g
+        ],
+        weight: 3
+      },
+      'Korean': {
+        patterns: [
+          /[\uac00-\ud7af]/g, // Hangul syllables
+          /[\u1100-\u11ff]/g, // Hangul Jamo
+          /\b(의|이|가|를|에|와|과|은|는|로|으로|에서|부터|까지|하고|그리고|하지만|그러나)\b/g
+        ],
+        weight: 3
+      },
+      'Arabic': {
+        patterns: [
+          /[\u0600-\u06ff]/g, // Arabic script
+          /\b(في|من|إلى|على|عن|مع|هذا|هذه|ذلك|تلك|التي|الذي|كان|كانت|يكون|تكون)\b/g
+        ],
+        weight: 3
+      },
+      'Russian': {
+        patterns: [
+          /[\u0400-\u04ff]/g, // Cyrillic script
+          /\b(и|в|на|с|не|это|что|как|он|она|они|мы|вы|я|был|была|были|быть|иметь)\b/g
+        ],
+        weight: 3
+      },
+      'Thai': {
+        patterns: [
+          /[\u0e00-\u0e7f]/g, // Thai script
+          /\b(และ|หรือ|ใน|ที่|เป็น|มี|จะ|ได้|แล้ว|นี้|นั้น|เขา|เธอ|ผม|ฉัน|คุณ)\b/g
+        ],
+        weight: 3
+      },
+      'German': {
+        patterns: [
+          /\b(der|die|das|und|oder|ich|du|er|sie|es|wir|ihr|sie|ein|eine|einen|mit|von|zu|auf|in|an|für|über|durch|nach|vor|bei|um|ohne|gegen|trotz|während|seit|bis|statt|außer|innerhalb|außerhalb)\b/g,
+          /[äöüß]/g
+        ],
+        weight: 2
+      },
+      'Spanish': {
+        patterns: [
+          /\b(el|la|los|las|de|del|y|o|en|con|por|para|como|que|se|le|lo|un|una|es|son|pero|si|no|muy|más|todo|todos|esta|este|están|fue|ser|estar|ter|fazer|ir|ver|dar|saber|querer|poder|dizer|cada|outro|mismo|tanto|menos|algo)\b/g,
+          /[ñáéíóúü]/g
+        ],
+        weight: 2
+      },
+      'French': {
+        patterns: [
+          /\b(le|la|les|de|du|des|et|ou|en|avec|par|pour|comme|que|se|lui|ce|un|une|est|sont|mais|si|non|très|plus|tout|tous|cette|ces|était|être|avoir|faire|aller|voir|donner|savoir|vouloir|pouvoir|dire|chaque|autre|même|tant|moins|quelque)\b/g,
+          /[àâäéèêëïîôùûüÿç]/g
+        ],
+        weight: 2
+      },
+      'Portuguese': {
+        patterns: [
+          /\b(o|a|os|as|de|da|do|das|dos|e|ou|em|com|por|para|como|que|se|lhe|um|uma|é|são|mas|se|não|muito|mais|todo|todos|esta|este|foram|ser|estar|ter|fazer|ir|ver|dar|saber|querer|poder|dizer|cada|outro|mesmo|tanto|menos|algo)\b/g,
+          /[ãõáéíóúâêîôûàèç]/g
+        ],
+        weight: 2
+      },
+      'English': {
+        patterns: [
+          /\b(the|and|or|in|on|at|to|for|of|with|by|from|as|that|this|these|those|is|are|was|were|be|been|being|have|has|had|do|does|did|will|would|can|could|should|may|might|must|a|an|but|if|not|very|more|all|some|any|each|other|same|so|much|less|something)\b/g
+        ],
+        weight: 1
+      }
+    };
+    
+    let maxScore = 0;
+    let bestLanguage = 'English';
+    
+    for (const [lang, config] of Object.entries(languagePatterns)) {
+      let score = 0;
+      config.patterns.forEach(pattern => {
+        const matches = combinedText.match(pattern);
+        if (matches) {
+          score += matches.length * config.weight;
+        }
+      });
+      
+      if (score > maxScore) {
+        maxScore = score;
+        bestLanguage = lang;
+      }
+    }
+    
+    if (maxScore > 2) {
+      detectedLanguage = bestLanguage;
+      sources.push('text-analysis');
+      confidence = maxScore > 8 ? 'high' : 'medium';
+    }
+    
+    console.log('Enhanced language detection:', { 
+      detectedLanguage, 
+      confidence, 
+      sources, 
+      score: maxScore,
+      captionLanguages,
+      htmlLang 
+    });
+    
+  } catch (error) {
+    console.error('Language detection error:', error);
+  }
+  
+  return { detectedLanguage, confidence, sources };
+}
+
+// Enhanced prompt with better language consistency
 function getAdvancedPrompt(detailLevel, isLongVideo = false, videoDuration = '') {
-  // Get language detection from page metadata
-  const languageResult = detectLanguageFromPageMetadata();
+  const languageResult = detectVideoLanguage();
   
   const baseInstructions = `CRITICAL LANGUAGE INSTRUCTION: You MUST respond ONLY in ${languageResult.detectedLanguage}.
 
 ENHANCED LANGUAGE DETECTION (Confidence: ${languageResult.confidence}):
 - Detected from sources: ${languageResult.sources.join(', ')}
 - Target language: ${languageResult.detectedLanguage}
-- Write EVERYTHING in ${languageResult.detectedLanguage} - no exceptions
-- NO mixed languages - maintain consistency throughout
+- ABSOLUTE REQUIREMENT: Write EVERYTHING in ${languageResult.detectedLanguage}
+- NO mixed languages allowed - complete consistency required
+- ALL headers, content, and conclusions must be in ${languageResult.detectedLanguage}
 
 Special handling for music/artistic content:
 - If minimal speech, focus on visual storytelling and artistic elements
 - Describe musical style, production quality, and emotional impact
 - Comment on any available lyrics or vocal performances
-- Analyze the overall aesthetic and creative direction`;
+- Analyze the overall aesthetic and creative direction
+
+LANGUAGE CONSISTENCY CHECK:
+Before writing each section, confirm you are using ${languageResult.detectedLanguage}.
+This applies to: titles, headings, content, transitions, and conclusions.`;
 
   if (isLongVideo) {
     return `${baseInstructions}
@@ -260,7 +456,9 @@ ${detailLevel === 'quick' ?
   `Summarize main points with clear structure in ${languageResult.detectedLanguage}.` : 
   `Cover topics thoroughly with organized sections in ${languageResult.detectedLanguage}.`}
 
-Structure with clear headings, all in ${languageResult.detectedLanguage}.`;
+Structure with clear headings, all in ${languageResult.detectedLanguage}.
+
+FINAL CHECK: Ensure every word is in ${languageResult.detectedLanguage}.`;
 }
 
 async function summarizeVideo(videoUrl, detailLevel, loadingMessage, contentDiv, loadingDiv, summarizeBtn) {
@@ -295,15 +493,15 @@ async function summarizeVideo(videoUrl, detailLevel, loadingMessage, contentDiv,
         }
       ],
       generationConfig: {
-        temperature: 0.02, // Even lower for consistency
+        temperature: 0.01, // Very low for consistency
         maxOutputTokens: isLongVideo ? 
-          (detailLevel === 'quick' ? 600 : 1500) : 
-          (detailLevel === 'quick' ? 450 : 1000), // Increased token limits
+          (detailLevel === 'quick' ? 700 : 1800) : 
+          (detailLevel === 'quick' ? 500 : 1200),
         topP: 0.05,
         topK: 1,
         candidateCount: 1,
         responseMimeType: "text/plain",
-        stopSequences: [] // Remove any stop sequences that might truncate
+        stopSequences: []
       },
       safetySettings: [
         {
@@ -370,19 +568,20 @@ async function summarizeVideo(videoUrl, detailLevel, loadingMessage, contentDiv,
         
         // Try to get a completion with a follow-up request for the ending
         try {
+          const languageResult = detectVideoLanguage();
           const completionRequest = {
             contents: [
               {
                 parts: [
                   { 
-                    text: `Complete this summary that was cut off. Provide ONLY the missing conclusion/ending in the same language. Do not repeat the existing content. Here's what we have so far: "${summary.slice(-200)}"\n\nProvide a proper conclusion that wraps up the summary naturally.` 
+                    text: `Complete this summary that was cut off. Provide ONLY the missing conclusion/ending in ${languageResult.detectedLanguage}. Do not repeat the existing content. Here's what we have so far: "${summary.slice(-200)}"\n\nProvide a proper conclusion that wraps up the summary naturally in ${languageResult.detectedLanguage}.` 
                   }
                 ]
               }
             ],
             generationConfig: {
-              temperature: 0.02,
-              maxOutputTokens: 200,
+              temperature: 0.01,
+              maxOutputTokens: 250,
               topP: 0.05
             }
           };
@@ -397,7 +596,7 @@ async function summarizeVideo(videoUrl, detailLevel, loadingMessage, contentDiv,
             const completionData = await completionResponse.json();
             if (completionData?.candidates?.[0]?.content?.parts?.[0]?.text) {
               const completion = completionData.candidates[0].content.parts[0].text.trim();
-              summary += ' ' + completion;
+              summary += (summary.endsWith('.') || summary.endsWith('!') || summary.endsWith('?') ? ' ' : '. ') + completion;
               isPartial = false;
               console.log('Successfully completed truncated summary');
             }
@@ -776,98 +975,11 @@ observer.observe(document.body, {
   subtree: true
 });
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'showToast') {
-    // Handle any toast messages if needed
-  }
-  return true;
-});
-
-// Enhanced language detection function (embedded in content script)
-function detectLanguageFromPageMetadata() {
-  const sources = [];
-  let detectedLanguage = 'English';
-  let confidence = 'low';
-
-  try {
-    // Check video title
-    const titleElement = document.querySelector('h1.style-scope.ytd-watch-metadata yt-formatted-string');
-    const title = titleElement?.textContent || '';
-    
-    // Check description
-    const descriptionElement = document.querySelector('#description-inline-expander .ytd-text-inline-expander');
-    const description = descriptionElement?.textContent?.substring(0, 500) || '';
-    
-    // Check page language
-    const htmlLang = document.documentElement.lang;
-    const languageMap = {
-      'en': 'English', 'en-US': 'English', 'en-GB': 'English',
-      'de': 'German', 'de-DE': 'German',
-      'es': 'Spanish', 'es-ES': 'Spanish',
-      'fr': 'French', 'fr-FR': 'French',
-      'it': 'Italian', 'pt': 'Portuguese',
-      'ja': 'Japanese', 'ko': 'Korean',
-      'zh': 'Chinese', 'ar': 'Arabic',
-      'ru': 'Russian', 'hi': 'Hindi'
-    };
-    
-    if (htmlLang && languageMap[htmlLang]) {
-      detectedLanguage = languageMap[htmlLang];
-      sources.push('page-lang');
-      confidence = 'medium';
+if (typeof chrome !== 'undefined' && chrome.runtime) {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === 'showToast') {
+      // Handle any toast messages if needed
     }
-    
-    // Analyze text patterns
-    const combinedText = `${title} ${description}`.toLowerCase();
-    
-    const languagePatterns = {
-      'German': {
-        patterns: [/\b(der|die|das|und|ich|du|er|sie|mit|von|zu|auf|in|für|über|durch|nach|vor|bei|um|gegen|während|seit|bis)\b/g, /[äöüß]/g],
-        weight: 2
-      },
-      'Spanish': {
-        patterns: [/\b(el|la|los|las|de|y|en|con|por|para|que|se|un|una|es|son|pero|si|no|muy|más|todo)\b/g, /[ñáéíóúü]/g],
-        weight: 2
-      },
-      'French': {
-        patterns: [/\b(le|la|les|de|du|et|en|avec|par|pour|que|se|ce|un|une|est|sont|mais|si|très|plus|tout)\b/g, /[àâäéèêëïîôùûüÿç]/g],
-        weight: 2
-      },
-      'English': {
-        patterns: [/\b(the|and|or|in|on|at|to|for|of|with|by|from|that|this|is|are|was|were|have|has|had|do|will|can|should)\b/g],
-        weight: 1
-      }
-    };
-    
-    let maxScore = 0;
-    let bestLanguage = 'English';
-    
-    for (const [lang, config] of Object.entries(languagePatterns)) {
-      let score = 0;
-      config.patterns.forEach(pattern => {
-        const matches = combinedText.match(pattern);
-        if (matches) {
-          score += matches.length * config.weight;
-        }
-      });
-      
-      if (score > maxScore) {
-        maxScore = score;
-        bestLanguage = lang;
-      }
-    }
-    
-    if (maxScore > 3) {
-      detectedLanguage = bestLanguage;
-      sources.push('text-analysis');
-      confidence = maxScore > 10 ? 'high' : 'medium';
-    }
-    
-    console.log('Language detection:', { detectedLanguage, confidence, sources, score: maxScore });
-    
-  } catch (error) {
-    console.error('Language detection error:', error);
-  }
-  
-  return { detectedLanguage, confidence, sources };
+    return true;
+  });
 }
