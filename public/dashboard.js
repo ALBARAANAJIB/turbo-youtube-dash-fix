@@ -35,8 +35,11 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Initialize the dashboard
   function init() {
+    console.log('🚀 Initializing dashboard...');
+    
     // Load user info
     chrome.storage.local.get('userInfo', (result) => {
+      console.log('👤 Loading user info:', result);
       if (result.userInfo) {
         if (result.userInfo.email) {
           userEmail.textContent = result.userInfo.email;
@@ -56,8 +59,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Load videos
     chrome.storage.local.get(['likedVideos', 'nextPageToken', 'totalResults'], (result) => {
+      console.log('📺 Loading videos from storage:', result);
+      
       if (result.likedVideos && result.likedVideos.length > 0) {
         videos = result.likedVideos;
+        console.log('✅ Found videos:', videos.length);
         renderVideos();
         
         if (result.totalResults) {
@@ -70,9 +76,16 @@ document.addEventListener('DOMContentLoaded', () => {
             addLoadMoreButton(result.nextPageToken);
           }
         }
+        
+        loadingElement.style.display = 'none';
       } else {
+        console.log('❌ No videos found in storage');
         loadingElement.style.display = 'none';
         noVideosElement.style.display = 'block';
+        noVideosElement.innerHTML = `
+          <h3>No videos found</h3>
+          <p>Your liked videos will appear here once fetched from the extension popup.</p>
+        `;
       }
     });
   }
@@ -166,28 +179,41 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Render videos based on search and filter
   function renderVideos() {
+    console.log('🎨 Rendering videos:', videos.length);
     videoList.innerHTML = '';
     
     const searchTerm = searchInput.value.toLowerCase();
     const filterValue = filterSelect.value;
     
     let filteredVideos = videos.filter(video => 
-      video.title.toLowerCase().includes(searchTerm) || 
-      video.channelTitle.toLowerCase().includes(searchTerm)
+      (video.title && video.title.toLowerCase().includes(searchTerm)) || 
+      (video.channelTitle && video.channelTitle.toLowerCase().includes(searchTerm))
     );
     
     switch (filterValue) {
       case 'recent':
-        filteredVideos.sort((a, b) => new Date(b.likedAt) - new Date(a.likedAt));
+        filteredVideos.sort((a, b) => new Date(b.likedAt || b.publishedAt) - new Date(a.likedAt || a.publishedAt));
         break;
       case 'oldest':
-        filteredVideos.sort((a, b) => new Date(a.likedAt) - new Date(b.likedAt));
+        filteredVideos.sort((a, b) => new Date(a.likedAt || a.publishedAt) - new Date(b.likedAt || b.publishedAt));
         break;
       case 'popular':
-        filteredVideos.sort((a, b) => parseInt(b.viewCount) - parseInt(a.viewCount));
+        filteredVideos.sort((a, b) => parseInt(b.viewCount || 0) - parseInt(a.viewCount || 0));
         break;
       default:
-        filteredVideos.sort((a, b) => new Date(b.likedAt) - new Date(a.likedAt));
+        filteredVideos.sort((a, b) => new Date(b.likedAt || b.publishedAt) - new Date(a.likedAt || a.publishedAt));
+    }
+    
+    if (filteredVideos.length === 0) {
+      if (searchTerm || filterValue !== 'all') {
+        noVideosElement.innerHTML = '<h3>No videos match your search or filter.</h3>';
+      } else {
+        noVideosElement.innerHTML = '<h3>No liked videos found.</h3><p>Try fetching videos from the extension popup first.</p>';
+      }
+      noVideosElement.style.display = 'block';
+      return;
+    } else {
+      noVideosElement.style.display = 'none';
     }
     
     filteredVideos.forEach(video => {
@@ -195,18 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
       videoList.appendChild(videoCard);
     });
     
-    loadingElement.style.display = 'none';
-    
-    if (filteredVideos.length === 0) {
-      if (searchTerm || filterValue !== 'all') {
-        noVideosElement.textContent = 'No videos match your search or filter.';
-      } else {
-        noVideosElement.textContent = 'No liked videos found. Try fetching videos first.';
-      }
-      noVideosElement.style.display = 'block';
-    } else {
-      noVideosElement.style.display = 'none';
-    }
+    console.log('✅ Rendered', filteredVideos.length, 'videos');
   }
   
   // Create a video card element
@@ -215,28 +230,28 @@ document.addEventListener('DOMContentLoaded', () => {
     card.className = 'video-card';
     card.dataset.id = video.id;
     
-    const likedDate = new Date(video.likedAt);
+    const likedDate = new Date(video.likedAt || video.publishedAt || Date.now());
     const formattedDate = likedDate.toLocaleDateString();
-    const viewCount = parseInt(video.viewCount).toLocaleString();
+    const viewCount = parseInt(video.viewCount || 0).toLocaleString();
     
     card.innerHTML = `
       <div class="video-thumbnail">
-        <img src="${video.thumbnail}" alt="${video.title}">
+        <img src="${video.thumbnail || '/icons/icon.png'}" alt="${video.title || 'Video thumbnail'}" onerror="this.src='/icons/icon.png'">
         <div class="checkbox-container">
           <input type="checkbox" class="video-checkbox" data-id="${video.id}">
         </div>
       </div>
       <div class="video-details">
         <h3 class="video-title">
-          <a href="https://www.youtube.com/watch?v=${video.id}" target="_blank">${video.title}</a>
+          <a href="${video.url || `https://www.youtube.com/watch?v=${video.id}`}" target="_blank">${video.title || 'Unknown Title'}</a>
         </h3>
-        <div class="video-channel">${video.channelTitle}</div>
+        <div class="video-channel">${video.channelTitle || 'Unknown Channel'}</div>
         <div class="video-meta">
           <span>${viewCount} views</span>
           <span>Liked on ${formattedDate}</span>
         </div>
         <div class="video-actions">
-          <button class="download-button" data-id="${video.id}" data-title="${video.title}">
+          <button class="download-button" data-id="${video.id}" data-title="${video.title || 'video'}">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
               <path d="M7 10L12 15L17 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -252,7 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
     
     const downloadButton = card.querySelector('.download-button');
-    downloadButton.addEventListener('click', () => downloadVideo(video.id, video.title));
+    downloadButton.addEventListener('click', () => downloadVideo(video.id, video.title || 'video'));
     
     const deleteButton = card.querySelector('.delete-button');
     deleteButton.addEventListener('click', () => deleteVideo(video.id));
@@ -548,6 +563,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const count = selectedVideos.size;
     selectionCountElement.textContent = `${count} video${count !== 1 ? 's' : ''} selected`;
     deleteSelectedButton.disabled = count === 0;
+    
+    // Show/hide sticky bottom bar
+    const stickyBar = document.querySelector('.sticky-bottom-bar');
+    if (stickyBar) {
+      stickyBar.style.display = count > 0 ? 'flex' : 'none';
+    }
   }
   
   // Show delete confirmation modal

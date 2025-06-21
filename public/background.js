@@ -1,8 +1,9 @@
+
 // YouTube Enhancer Background Script with Modern Chrome Authentication
 console.log('🚀 YouTube Enhancer background script loaded');
 
 // OAuth 2.0 constants
-const CLIENT_ID = '304162096302-st2sml4kkd7cus7646fqun8ada31lgus.apps.googleusercontent.com';
+const CLIENT_ID = '304162096302-4mpo9949jogs1ptnpmc0s4ipkq53dbsm.apps.googleusercontent.com';
 const REDIRECT_URL = chrome.identity.getRedirectURL();
 const SCOPES = [
   'https://www.googleapis.com/auth/youtube.readonly',
@@ -121,16 +122,29 @@ async function fetchLikedVideos() {
     const data = await response.json();
     console.log('✅ Liked videos fetched:', data.items?.length || 0);
     
+    // Process videos with proper structure for dashboard
+    const processedVideos = (data.items || []).map(video => ({
+      id: video.id,
+      title: video.snippet?.title || 'Unknown Title',
+      channelTitle: video.snippet?.channelTitle || 'Unknown Channel',
+      publishedAt: video.snippet?.publishedAt || new Date().toISOString(),
+      likedAt: new Date().toISOString(), // We don't have actual liked date from API
+      url: `https://www.youtube.com/watch?v=${video.id}`,
+      viewCount: video.statistics?.viewCount || '0',
+      likeCount: video.statistics?.likeCount || '0',
+      thumbnail: video.snippet?.thumbnails?.medium?.url || video.snippet?.thumbnails?.default?.url || ''
+    }));
+    
     // Store the videos
     await chrome.storage.local.set({
-      likedVideos: data.items || [],
+      likedVideos: processedVideos,
       lastFetch: Date.now()
     });
     
     return {
       success: true,
-      videos: data.items || [],
-      count: data.items?.length || 0
+      videos: processedVideos,
+      count: processedVideos.length
     };
     
   } catch (error) {
@@ -142,7 +156,7 @@ async function fetchLikedVideos() {
   }
 }
 
-// Export liked videos data
+// Export liked videos data - Fixed for service worker
 async function exportLikedVideos() {
   try {
     console.log('📤 Exporting liked videos...');
@@ -162,23 +176,26 @@ async function exportLikedVideos() {
       exportDate: new Date().toISOString(),
       totalVideos: videos.length,
       videos: videos.map(video => ({
-        title: video.snippet?.title,
-        channelTitle: video.snippet?.channelTitle,
-        publishedAt: video.snippet?.publishedAt,
+        title: video.title,
+        channelTitle: video.channelTitle,
+        publishedAt: video.publishedAt,
         videoId: video.id,
-        url: `https://www.youtube.com/watch?v=${video.id}`,
-        viewCount: video.statistics?.viewCount,
-        likeCount: video.statistics?.likeCount,
-        thumbnail: video.snippet?.thumbnails?.medium?.url
+        url: video.url,
+        viewCount: video.viewCount,
+        likeCount: video.likeCount,
+        thumbnail: video.thumbnail
       }))
     };
     
-    // Create and download the file
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
+    // Convert to JSON string
+    const jsonString = JSON.stringify(exportData, null, 2);
     
+    // Create data URL for the JSON file
+    const dataUrl = 'data:application/json;charset=utf-8,' + encodeURIComponent(jsonString);
+    
+    // Use chrome.downloads to save the file
     await chrome.downloads.download({
-      url: url,
+      url: dataUrl,
       filename: `youtube-liked-videos-${new Date().toISOString().split('T')[0]}.json`,
       saveAs: true
     });
