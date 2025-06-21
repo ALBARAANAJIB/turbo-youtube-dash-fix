@@ -1,6 +1,7 @@
 
 // Simplified and reliable AI video summarization
-const API_KEY = 'AIzaSyDxQpk6jmBsM5lsGdzRJKokQkwSVTk5sRg';
+// SECURITY: API key should NEVER be hardcoded in frontend code
+// This file should only be used if you have a secure backend proxy
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent';
 
 import { detectLanguageFromVideoContent } from './languageDetection';
@@ -44,7 +45,13 @@ COMPLETION REQUIREMENTS:
 FINAL CHECK: Before submitting, verify EVERY word is in ${targetLanguage}.`;
 }
 
-export async function summarizeYouTubeVideo(videoUrl: string, detailLevel: 'quick' | 'detailed' = 'detailed'): Promise<string> {
+// WARNING: This function requires a secure API key
+// Should only be used with proper backend proxy
+export async function summarizeYouTubeVideo(videoUrl: string, detailLevel: 'quick' | 'detailed' = 'detailed', apiKey?: string): Promise<string> {
+  if (!apiKey) {
+    throw new Error('API key is required but not provided. Use backend API instead for security.');
+  }
+
   try {
     console.log(`Starting summarization for ${videoUrl} in ${detailLevel} mode`);
     
@@ -83,7 +90,7 @@ export async function summarizeYouTubeVideo(videoUrl: string, detailLevel: 'quic
 
     console.log('Making API request with simplified language enforcement...');
     
-    const response = await fetch(`${GEMINI_API_URL}?key=${API_KEY}`, {
+    const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestBody)
@@ -118,7 +125,7 @@ export async function summarizeYouTubeVideo(videoUrl: string, detailLevel: 'quic
       if (data.candidates[0].finishReason === 'MAX_TOKENS') {
         console.log('Response truncated, attempting completion...');
         try {
-          const completed = await completeTruncatedSummary(summary);
+          const completed = await completeTruncatedSummary(summary, apiKey);
           if (completed) summary = completed;
         } catch (e) {
           console.log('Could not complete, using partial content');
@@ -155,7 +162,7 @@ export async function summarizeYouTubeVideo(videoUrl: string, detailLevel: 'quic
 }
 
 // Simple completion for truncated summaries
-async function completeTruncatedSummary(incompleteSummary: string): Promise<string | null> {
+async function completeTruncatedSummary(incompleteSummary: string, apiKey: string): Promise<string | null> {
   const languageResult = detectLanguageFromVideoContent();
   const targetLang = languageResult.detectedLanguage;
   
@@ -179,7 +186,7 @@ Provide ONLY the missing conclusion in ${targetLang}:
       }
     };
     
-    const response = await fetch(`${GEMINI_API_URL}?key=${API_KEY}`, {
+    const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(completionRequest)

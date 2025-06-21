@@ -1,0 +1,32 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube Enhancer Extension</title>
+</head>
+<body>
+  <div id="root">
+    <h1>YouTube Enhancer Extension</h1>
+    <p>This is a Chrome extension project. To use the extension:</p>
+    <ol>
+      <li>Open Chrome and go to <code>chrome://extensions/</code></li>
+      <li>Enable "Developer mode" in the top right</li>
+      <li>Click "Load unpacked" and select the <code>public/</code> folder</li>
+    </ol>
+    
+    <h2>Project Structure</h2>
+    <ul>
+      <li><strong>public/manifest.json</strong> - Extension configuration</li>
+      <li><strong>public/background.js</strong> - Service worker for OAuth</li>
+      <li><strong>public/content.js</strong> - Content script for YouTube pages</li>
+      <li><strong>backend/</strong> - Node.js API server</li>
+    </ul>
+    
+    <h2>Setup Instructions</h2>
+    <p>1. Backend: <code>cd backend && npm install && npm start</code></p>
+    <p>2. Load extension from public/ folder in Chrome</p>
+  </div>
+</body>
+</html>

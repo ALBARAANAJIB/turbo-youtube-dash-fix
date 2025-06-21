@@ -36,7 +36,7 @@
     "scripting"
   ],
   "oauth2": {
-    "client_id": "304162096302-4mpo9949jogs1ptnpmc0s4ipkq53dbsm.apps.googleusercontent.com",
+    "client_id": "304162096302-st2sml4kkd7cus7646fqun8ada31lgus.apps.googleusercontent.com",
     "scopes": [
       "https://www.googleapis.com/auth/youtube.readonly",
       "https://www.googleapis.com/auth/youtube.force-ssl"
