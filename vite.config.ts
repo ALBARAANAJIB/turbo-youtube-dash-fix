@@ -1,32 +1,26 @@
 
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import { crx } from '@crxjs/vite-plugin'
-import path from 'path'
-import manifest from './public/manifest.json'
+import { defineConfig } from "vite";
+import path from "path";
 
-// https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [
-    react(),
-    crx({
-      manifest: manifest as any
-    })
-  ],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
-  },
   server: {
     port: 8080
   },
   build: {
     rollupOptions: {
       input: {
-        popup: 'public/popup.html',
-        dashboard: 'public/dashboard.html'
+        popup: path.resolve(__dirname, 'public/popup.html'),
+        background: path.resolve(__dirname, 'public/background.js'),
+        content: path.resolve(__dirname, 'public/content.js'),
+      },
+      output: {
+        entryFileNames: '[name].js',
+        chunkFileNames: '[name].js',
+        assetFileNames: '[name].[ext]'
       }
-    }
-  }
-})
+    },
+    outDir: 'dist',
+    emptyOutDir: true,
+  },
+  publicDir: 'public'
+});

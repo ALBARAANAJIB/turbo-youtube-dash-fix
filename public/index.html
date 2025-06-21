@@ -4,12 +4,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>YouTube Enhancer</title>
-  <link rel="stylesheet" href="index.css">
+  <title>YouTube Enhancer Extension</title>
 </head>
 <body>
-  <div id="root"></div>
-  <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
-  <script src="index.js" type="module"></script>
+  <div id="root">
+    <h1>YouTube Enhancer Extension</h1>
+    <p>This is a Chrome extension. Load the public/ folder as an unpacked extension in Chrome.</p>
+    <p>Files in this directory:</p>
+    <ul>
+      <li>manifest.json - Extension configuration</li>
+      <li>background.js - Service worker</li>
+      <li>content.js - Content script for YouTube pages</li>
+      <li>popup.html - Extension popup</li>
+    </ul>
+  </div>
 </body>
 </html>

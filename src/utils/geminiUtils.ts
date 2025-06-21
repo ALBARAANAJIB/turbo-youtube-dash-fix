@@ -1,64 +1,68 @@
-// Enhanced AI video summarization with anti-truncation measures and improved prompting
 
+// Simplified and reliable AI video summarization
 const API_KEY = 'AIzaSyDxQpk6jmBsM5lsGdzRJKokQkwSVTk5sRg';
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent';
 
-// Enhanced prompt with improved language detection
-const getUnifiedPrompt = (detailLevel: string, languageHint?: string) => {
+import { detectLanguageFromVideoContent } from './languageDetection';
+
+// Create a focused prompt that enforces language consistency
+function createLanguageConsistentPrompt(detailLevel: string) {
+  const languageResult = detectLanguageFromVideoContent();
+  const targetLanguage = languageResult.detectedLanguage;
   const wordCount = detailLevel === 'quick' ? '200-300' : '500-700';
-  const targetLanguage = languageHint || 'the video\'s spoken language';
   
-  return `CRITICAL LANGUAGE INSTRUCTION: You MUST respond ONLY in ${targetLanguage}. 
+  console.log('Creating prompt for language:', targetLanguage, 'with confidence:', languageResult.confidence);
+  
+  return `CRITICAL LANGUAGE INSTRUCTION: You MUST write your ENTIRE response in ${targetLanguage}. Every single word must be in ${targetLanguage}.
 
-ENHANCED LANGUAGE DETECTION:
+LANGUAGE ENFORCEMENT RULES:
 - Target language: ${targetLanguage}
-- Write EVERYTHING in ${targetLanguage} - headers, content, conclusion
-- NO mixed languages allowed - maintain complete consistency
-- If this is a music video with limited speech, focus on visual and artistic elements
+- Detection confidence: ${languageResult.confidence}
+- Sources: ${languageResult.sources.join(', ')}
+- ZERO tolerance for language mixing
+- ALL content including headers, body, and conclusion must be in ${targetLanguage}
 
-COMPLETION REQUIREMENT: Provide a complete summary with proper conclusion.
+TASK: Create a ${detailLevel} video summary (${wordCount} words) in ${targetLanguage}.
 
-Create a ${detailLevel} summary (${wordCount} words) in ${targetLanguage}.
-
-Structure Requirements:
+STRUCTURE (all in ${targetLanguage}):
 ${detailLevel === 'quick' ? `
-- **Main Topic**: Brief overview in ${targetLanguage}
-- **Key Points**: 3-4 main points in ${targetLanguage}
-- **Conclusion**: Clear wrap-up in ${targetLanguage}
+- Brief overview in ${targetLanguage}
+- Main points (3-4 key items) in ${targetLanguage}
+- Clear conclusion in ${targetLanguage}
 ` : `
-- **Introduction**: Context and theme in ${targetLanguage}
-- **Core Content**: Detailed breakdown in ${targetLanguage}
-- **Key Insights**: Important takeaways in ${targetLanguage}
-- **Conclusion**: Summary and significance in ${targetLanguage}
+- Introduction and context in ${targetLanguage}
+- Detailed content analysis in ${targetLanguage}
+- Key insights and takeaways in ${targetLanguage}
+- Comprehensive conclusion in ${targetLanguage}
 `}
 
-Special considerations for music/artistic content:
-- Describe visual storytelling and artistic direction
-- Comment on musical style and production quality
-- Analyze emotional impact and aesthetic choices
-- Include any lyrical content or vocal performances
+COMPLETION REQUIREMENTS:
+- Must end with proper conclusion in ${targetLanguage}
+- No abrupt endings or incomplete thoughts
+- Full coherent summary from start to finish in ${targetLanguage}
 
-IMPORTANT: Always end with a proper conclusion in ${targetLanguage}. No incomplete sentences.`;
-};
+FINAL CHECK: Before submitting, verify EVERY word is in ${targetLanguage}.`;
+}
 
-export async function summarizeYouTubeVideo(videoUrl: string, detailLevel: 'quick' | 'detailed' = 'detailed', languageHint?: string): Promise<string> {
+export async function summarizeYouTubeVideo(videoUrl: string, detailLevel: 'quick' | 'detailed' = 'detailed'): Promise<string> {
   try {
-    console.log(`Enhanced summarization for ${videoUrl} with mode: ${detailLevel}, language hint: ${languageHint}`);
+    console.log(`Starting summarization for ${videoUrl} in ${detailLevel} mode`);
     
     const generationConfig = {
-      temperature: 0.02,
+      temperature: 0.01, // Ultra-low for consistency
       maxOutputTokens: detailLevel === 'quick' ? 600 : 1200,
       topP: 0.05,
       topK: 1,
       candidateCount: 1,
-      stopSequences: []
+      stopSequences: [],
+      responseMimeType: "text/plain"
     };
 
     const requestBody = {
       contents: [
         {
           parts: [
-            { text: getUnifiedPrompt(detailLevel, languageHint) },
+            { text: createLanguageConsistentPrompt(detailLevel) },
             {
               fileData: {
                 fileUri: videoUrl,
@@ -70,47 +74,31 @@ export async function summarizeYouTubeVideo(videoUrl: string, detailLevel: 'quic
       ],
       generationConfig,
       safetySettings: [
-        {
-          category: "HARM_CATEGORY_HARASSMENT",
-          threshold: "BLOCK_NONE"
-        },
-        {
-          category: "HARM_CATEGORY_HATE_SPEECH", 
-          threshold: "BLOCK_NONE"
-        },
-        {
-          category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-          threshold: "BLOCK_NONE"
-        },
-        {
-          category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-          threshold: "BLOCK_NONE"
-        }
+        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
       ]
     };
 
-    console.log('Making enhanced API request with language detection...');
+    console.log('Making API request with simplified language enforcement...');
     
     const response = await fetch(`${GEMINI_API_URL}?key=${API_KEY}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Gemini API Error:', errorText);
+      console.error('API Error:', errorText);
       
       if (response.status === 429) {
         throw new Error('High demand detected 🌟 Please try again in a few minutes');
       }
-      
       if (response.status === 400 && errorText.includes('Video too long')) {
         throw new Error('Video is quite lengthy 📹 Try Quick mode for better results');
       }
-      
       if (response.status >= 500) {
         throw new Error('Servers taking a break ☕ Please try again shortly');
       }
@@ -122,64 +110,28 @@ export async function summarizeYouTubeVideo(videoUrl: string, detailLevel: 'quic
     console.log('API Response received');
     
     let summary = '';
-    let needsCompletion = false;
     
     if (data?.candidates?.[0]?.content?.parts?.[0]?.text) {
       summary = data.candidates[0].content.parts[0].text.trim();
       
+      // Check if truncated and try to complete
       if (data.candidates[0].finishReason === 'MAX_TOKENS') {
-        needsCompletion = true;
         console.log('Response truncated, attempting completion...');
-      }
-      
-      const lastSentence = summary.split('.').pop()?.trim() || '';
-      if (lastSentence.length > 50 && !lastSentence.includes('conclusion') && !lastSentence.includes('summary')) {
-        needsCompletion = true;
-        console.log('Summary appears incomplete, attempting completion...');
-      }
-      
-      if (needsCompletion && summary.length > 100) {
         try {
-          const completionPrompt = `Complete this ${detailLevel} summary that was cut off. Provide ONLY the missing conclusion/ending in ${languageHint || 'the same language'}. Do not repeat existing content.
-
-Current summary: "${summary.slice(-300)}"
-
-Provide a natural conclusion in ${languageHint || 'the same language'}.`;
-
-          const completionRequest = {
-            contents: [{ parts: [{ text: completionPrompt }] }],
-            generationConfig: {
-              temperature: 0.02,
-              maxOutputTokens: 200,
-              topP: 0.05
-            }
-          };
-          
-          const completionResponse = await fetch(`${GEMINI_API_URL}?key=${API_KEY}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(completionRequest)
-          });
-          
-          if (completionResponse.ok) {
-            const completionData = await completionResponse.json();
-            if (completionData?.candidates?.[0]?.content?.parts?.[0]?.text) {
-              const completion = completionData.candidates[0].content.parts[0].text.trim();
-              summary += (summary.endsWith('.') || summary.endsWith('!') || summary.endsWith('?') ? ' ' : '. ') + completion;
-              console.log('Successfully completed summary');
-            }
-          }
-        } catch (completionError) {
-          console.log('Could not complete summary, proceeding with available content');
+          const completed = await completeTruncatedSummary(summary);
+          if (completed) summary = completed;
+        } catch (e) {
+          console.log('Could not complete, using partial content');
         }
       }
       
       if (summary && summary.length > 50) {
-        console.log('Summary extracted successfully, length:', summary.length);
+        console.log('Summary generated successfully, length:', summary.length);
         return summary;
       }
     }
     
+    // Handle specific finish reasons
     if (data?.candidates?.[0]?.finishReason) {
       const reason = data.candidates[0].finishReason;
       if (reason === 'SAFETY') {
@@ -202,5 +154,49 @@ Provide a natural conclusion in ${languageHint || 'the same language'}.`;
   }
 }
 
-// Export for backward compatibility
+// Simple completion for truncated summaries
+async function completeTruncatedSummary(incompleteSummary: string): Promise<string | null> {
+  const languageResult = detectLanguageFromVideoContent();
+  const targetLang = languageResult.detectedLanguage;
+  
+  const completionPrompt = `Complete this ${targetLang} summary with a proper conclusion.
+
+Incomplete summary ending: "${incompleteSummary.slice(-200)}"
+
+Provide ONLY the missing conclusion in ${targetLang}:
+- Brief wrap-up of main points
+- Clear final statement
+- Maximum 60 words
+- Use ONLY ${targetLang}`;
+
+  try {
+    const completionRequest = {
+      contents: [{ parts: [{ text: completionPrompt }] }],
+      generationConfig: {
+        temperature: 0.01,
+        maxOutputTokens: 150,
+        topP: 0.05
+      }
+    };
+    
+    const response = await fetch(`${GEMINI_API_URL}?key=${API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(completionRequest)
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      if (data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+        const completion = data.candidates[0].content.parts[0].text.trim();
+        return incompleteSummary + (incompleteSummary.endsWith('.') ? ' ' : '. ') + completion;
+      }
+    }
+  } catch (error) {
+    console.error('Completion failed:', error);
+  }
+  
+  return null;
+}
+
 export { summarizeYouTubeVideo as default };

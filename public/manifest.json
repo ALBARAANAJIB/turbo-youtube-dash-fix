@@ -8,11 +8,8 @@
     "16": "icons/icon.png",
     "48": "icons/icon.png",
     "128": "icons/icon.png"
-  
   },
-
-  "key":"MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAypr2wCZv/Kep7UcuysmN6MBHVqsWG3oYq8pk4SjBhWE2NAZE7n4kInSh4pQEWxiWt2hM5dZQuexwfKAMJNaZ0HxdmTUy3ExupUtWsnZBnJ4SBY0Ra3zanDN7Sohpa+3A98SXl8hWVbRvqhwcdN3vqhbvocc//GkdcpqmoVXoVC5AU3YQwsqrFl+8ULSmGoE97BbEnAHK1b1daCIIpWWcEHNxmJmCW1Twg7XjOcEB+BllTRboXAnEU0aNdSv2ZcueA6wQySeHZLinIVZXq8Z75GhM5yJWr6wTMJqLeVOeS5p/fxMdv+wwK9GA9TxVc/4ehzSk8SIlFOsc5/c5R9bUWQIDAQAB",
-
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAypr2wCZv/Kep7UcuysmN6MBHVqsWG3oYq8pk4SjBhWE2NAZE7n4kInSh4pQEWxiWt2hM5dZQuexwfKAMJNaZ0HxdmTUy3ExupUtWsnZBnJ4SBY0Ra3zanDN7Sohpa+3A98SXl8hWVbRvqhwcdN3vqhbvocc//GkdcpqmoVXoVC5AU3YQwsqrFl+8ULSmGoE97BbEnAHK1b1daCIIpWWcEHNxmJmCW1Twg7XjOcEB+BllTRboXAnEU0aNdSv2ZcueA6wQySeHZLinIVZXq8Z75GhM5yJWr6wTMJqLeVOeS5p/fxMdv+wwK9GA9TxVc/4ehzSk8SIlFOsc5/c5R9bUWQIDAQAB",
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -32,7 +29,7 @@
     }
   ],
   "permissions": [
-    "storage",
+    "storage", 
     "identity",
     "tabs",
     "downloads",
@@ -47,7 +44,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["dashboard.html", "index.html"],
+      "resources": ["dashboard.html"],
       "matches": ["<all_urls>"]
     }
   ],

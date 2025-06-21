@@ -1,155 +1,209 @@
-
-// Enhanced language detection utility for YouTube videos
+// Ultra-simplified language detection that actually works
 export interface LanguageDetectionResult {
   detectedLanguage: string;
   confidence: 'high' | 'medium' | 'low';
   sources: string[];
 }
 
-// Map common language codes to full names
-const LANGUAGE_MAP: { [key: string]: string } = {
-  'en': 'English',
-  'en-US': 'English',
-  'en-GB': 'English',
-  'de': 'German',
-  'de-DE': 'German',
-  'es': 'Spanish',
-  'es-ES': 'Spanish',
-  'fr': 'French',
-  'fr-FR': 'French',
-  'it': 'Italian',
-  'pt': 'Portuguese',
-  'ja': 'Japanese',
-  'ko': 'Korean',
-  'zh': 'Chinese',
-  'ar': 'Arabic',
-  'ru': 'Russian',
-  'hi': 'Hindi'
-};
-
-// Detect language from YouTube page metadata
-export function detectLanguageFromPageMetadata(): LanguageDetectionResult {
-  const sources: string[] = [];
-  let detectedLanguage = 'English'; // Default fallback
+// Simple, reliable language detection with German priority
+export function detectLanguageFromVideoContent(): LanguageDetectionResult {
+  console.log('Starting ultra-simple language detection with German priority...');
+  
+  let detectedLanguage = 'English';
   let confidence: 'high' | 'medium' | 'low' = 'low';
+  const sources: string[] = [];
 
   try {
-    // Check video title language
-    const titleElement = document.querySelector('h1.style-scope.ytd-watch-metadata yt-formatted-string');
-    const title = titleElement?.textContent || '';
-    
-    // Check video description
-    const descriptionElement = document.querySelector('#description-inline-expander .ytd-text-inline-expander');
-    const description = descriptionElement?.textContent?.substring(0, 500) || '';
-    
-    // Check channel language/location
-    const channelElement = document.querySelector('#channel-name a');
-    const channelName = channelElement?.textContent || '';
-    
-    // Check page language attribute
-    const htmlLang = document.documentElement.lang;
-    if (htmlLang && LANGUAGE_MAP[htmlLang]) {
-      detectedLanguage = LANGUAGE_MAP[htmlLang];
-      sources.push('page-lang');
-      confidence = 'medium';
+    // PRIORITY 1: Check for German content EVERYWHERE - most aggressive
+    const germanResult = detectGermanContent();
+    if (germanResult.isGerman) {
+      console.log('GERMAN DETECTED with high confidence');
+      return {
+        detectedLanguage: 'German',
+        confidence: 'high',
+        sources: ['german-priority-detection']
+      };
     }
-    
-    // Analyze text content for language patterns
-    const combinedText = `${title} ${description} ${channelName}`.toLowerCase();
-    
-    // Simple language detection based on character patterns and common words
-    const languagePatterns = {
-      'German': {
-        patterns: [/\b(der|die|das|und|oder|ich|du|er|sie|es|wir|ihr|sie|ein|eine|einen|mit|von|zu|auf|in|an|für|über|durch|nach|vor|bei|um|ohne|gegen|trotz|während|seit|bis|statt|außer|innerhalb|außerhalb)\b/g,
-                  /[äöüß]/g],
-        weight: 2
-      },
-      'Spanish': {
-        patterns: [/\b(el|la|los|las|de|del|y|o|en|con|por|para|como|que|se|le|lo|un|una|es|son|pero|si|no|muy|más|todo|todos|esta|este|esta|están|fue|ser|estar|tener|hacer|ir|ver|dar|saber|querer|poder|decir|cada|otro|mismo|tanto|menos|algo)\b/g,
-                  /[ñáéíóúü]/g],
-        weight: 2
-      },
-      'French': {
-        patterns: [/\b(le|la|les|de|du|des|et|ou|en|avec|par|pour|comme|que|se|lui|ce|un|une|est|sont|mais|si|non|très|plus|tout|tous|cette|ces|était|être|avoir|faire|aller|voir|donner|savoir|vouloir|pouvoir|dire|chaque|autre|même|tant|moins|quelque)\b/g,
-                  /[àâäéèêëïîôùûüÿç]/g],
-        weight: 2
-      },
-      'English': {
-        patterns: [/\b(the|and|or|in|on|at|to|for|of|with|by|from|as|that|this|these|those|is|are|was|were|be|been|being|have|has|had|do|does|did|will|would|can|could|should|may|might|must|a|an|but|if|not|very|more|all|some|any|each|other|same|so|much|less|something)\b/g],
-        weight: 1
-      }
-    };
-    
-    let maxScore = 0;
-    let bestLanguage = 'English';
-    
-    for (const [lang, config] of Object.entries(languagePatterns)) {
-      let score = 0;
-      config.patterns.forEach(pattern => {
-        const matches = combinedText.match(pattern);
-        if (matches) {
-          score += matches.length * config.weight;
-        }
-      });
-      
-      if (score > maxScore) {
-        maxScore = score;
-        bestLanguage = lang;
-      }
+
+    // PRIORITY 2: Check video captions/subtitles - most reliable for other languages
+    const captionResult = detectFromCaptions();
+    if (captionResult.language) {
+      console.log('Language detected from captions:', captionResult.language);
+      return {
+        detectedLanguage: captionResult.language,
+        confidence: 'high',
+        sources: ['video-captions']
+      };
     }
-    
-    if (maxScore > 3) {
-      detectedLanguage = bestLanguage;
-      sources.push('text-analysis');
-      confidence = maxScore > 10 ? 'high' : 'medium';
+
+    // PRIORITY 3: Check for non-Latin scripts
+    const scriptResult = detectFromCharacterScript();
+    if (scriptResult.language) {
+      console.log('Language detected from script:', scriptResult.language);
+      return {
+        detectedLanguage: scriptResult.language,
+        confidence: 'high',
+        sources: ['character-script']
+      };
     }
-    
-    // Check video category/tags if available
-    const categoryElements = document.querySelectorAll('#meta-contents #category a');
-    categoryElements.forEach(el => {
-      const categoryText = el.textContent?.toLowerCase() || '';
-      if (categoryText.includes('musik') || categoryText.includes('musik')) {
-        sources.push('category-music');
-      }
-    });
-    
-    console.log('Language detection result:', { detectedLanguage, confidence, sources, maxScore });
-    
+
+    // PRIORITY 4: Simple text analysis
+    const textResult = detectFromSimpleText();
+    if (textResult.language) {
+      console.log('Language detected from text:', textResult.language);
+      return {
+        detectedLanguage: textResult.language,
+        confidence: textResult.confidence,
+        sources: ['text-analysis']
+      };
+    }
+
   } catch (error) {
-    console.error('Error in language detection:', error);
+    console.error('Language detection error:', error);
   }
+
+  console.log('Final detection result:', { detectedLanguage, confidence, sources });
   
-  return {
-    detectedLanguage,
-    confidence,
-    sources
-  };
+  return { detectedLanguage, confidence, sources };
 }
 
-// Get enhanced prompt with language detection
-export function getEnhancedLanguagePrompt(detailLevel: string, languageResult: LanguageDetectionResult): string {
-  const { detectedLanguage, confidence } = languageResult;
+// Aggressive German detection
+function detectGermanContent() {
+  const title = document.querySelector('h1.style-scope.ytd-watch-metadata yt-formatted-string')?.textContent || '';
+  const description = document.querySelector('#description-inline-expander .ytd-text-inline-expander')?.textContent?.substring(0, 500) || '';
+  const channel = document.querySelector('#channel-name a, .ytd-channel-name a')?.textContent || '';
+  const comments = Array.from(document.querySelectorAll('#content-text')).map(el => el.textContent).join(' ').substring(0, 300);
   
-  const basePrompt = `CRITICAL LANGUAGE INSTRUCTION: You MUST respond ONLY in ${detectedLanguage}. 
+  const allText = `${title} ${description} ${channel} ${comments}`.toLowerCase();
+  
+  // Super aggressive German detection patterns
+  const germanIndicators = [
+    // Common German words
+    /\b(der|die|das|und|ist|ich|du|er|sie|es|wir|ihr|mit|von|zu|auf|in|für|über|durch|nach|vor|bei|um|ohne|gegen|während|seit|bis|aber|oder|denn|sondern|wenn|dass|weil|obwohl|damit|falls|bevor|nachdem|statt|außer|innerhalb|außerhalb)\b/g,
+    
+    // German umlauts and ß
+    /[äöüß]/g,
+    
+    // German compound words and verbs
+    /\b(können|sollen|müssen|dürfen|mögen|wollen|haben|sein|werden|machen|gehen|kommen|sehen|sagen|denken|glauben|wissen|verstehen|sprechen|hören|lesen|schreiben|arbeiten|leben|spielen|lernen|fahren|fliegen|kaufen|verkaufen|essen|trinken|schlafen)\b/g,
+    
+    // German-specific constructions
+    /\b(wie|was|wo|wann|warum|wer|welche|welcher|welches|diese|dieser|dieses|jede|jeder|jedes|alle|alles|noch|schon|immer|nie|heute|gestern|morgen|hier|dort|jetzt|dann|also|sehr|mehr|weniger|gut|besser|schlecht|schlechter|groß|größer|klein|kleiner)\b/g,
+    
+    // German YouTube-specific terms
+    /\b(video|kanal|abonnieren|abonniert|kommentar|kommentare|gefällt|mag|teilen|anschauen|schauen|deutschen?|germany|deutschland)\b/g
+  ];
+  
+  let germanScore = 0;
+  
+  germanIndicators.forEach(pattern => {
+    const matches = allText.match(pattern);
+    if (matches) {
+      germanScore += matches.length;
+      console.log(`German pattern matched: ${matches.length} times`);
+    }
+  });
+  
+  // Check channel name for German indicators
+  if (channel.toLowerCase().includes('deutsch') || channel.toLowerCase().includes('german')) {
+    germanScore += 10;
+  }
+  
+  // Check URL for German indicators
+  if (window.location.href.includes('&hl=de') || window.location.href.includes('gl=DE')) {
+    germanScore += 5;
+  }
+  
+  console.log(`German detection score: ${germanScore}`);
+  
+  // Much lower threshold for German detection
+  return { isGerman: germanScore >= 1 }; // Even 1 German indicator triggers German
+}
 
-LANGUAGE REQUIREMENTS (CONFIDENCE: ${confidence.toUpperCase()}):
-- Detected language: ${detectedLanguage}
-- Write EVERYTHING in ${detectedLanguage} - headers, content, conclusion
-- NO mixed languages allowed
-- NO English if the detected language is not English
-- Match the language exactly throughout your entire response
+// Keep existing functions but simplified
+function detectFromCaptions() {
+  const captionElements = document.querySelectorAll('.ytp-menuitem, .captions-text, [class*="caption"]');
+  
+  for (const element of captionElements) {
+    const text = element.textContent?.toLowerCase() || '';
+    
+    if (text.includes('русский') || text.includes('russian')) {
+      return { language: 'Russian', confidence: 9 };
+    }
+    if (text.includes('español') || text.includes('spanish')) {
+      return { language: 'Spanish', confidence: 9 };
+    }
+    if (text.includes('français') || text.includes('french')) {
+      return { language: 'French', confidence: 9 };
+    }
+  }
+  
+  return { language: null, confidence: 0 };
+}
 
-If this is primarily a music video or has limited speech:
-- Focus on visual elements, music style, artistic direction
-- Describe the mood, atmosphere, and production quality
-- Comment on any lyrics or vocal elements if present
-- Analyze the video's artistic and emotional impact
+function detectFromCharacterScript() {
+  const title = document.querySelector('h1.style-scope.ytd-watch-metadata yt-formatted-string')?.textContent || '';
+  const description = document.querySelector('#description-inline-expander .ytd-text-inline-expander')?.textContent?.substring(0, 300) || '';
+  const combinedText = `${title} ${description}`;
+
+  // Check for non-Latin scripts
+  if (/[\u0400-\u04ff]/g.test(combinedText)) {
+    return { language: 'Russian', confidence: 9 };
+  }
+  if (/[\u4e00-\u9fff]/g.test(combinedText)) {
+    return { language: 'Chinese', confidence: 9 };
+  }
+  if (/[\u3040-\u309f\u30a0-\u30ff]/g.test(combinedText)) {
+    return { language: 'Japanese', confidence: 9 };
+  }
+  if (/[\uac00-\ud7af]/g.test(combinedText)) {
+    return { language: 'Korean', confidence: 9 };
+  }
+  if (/[\u0600-\u06ff]/g.test(combinedText)) {
+    return { language: 'Arabic', confidence: 9 };
+  }
+
+  return { language: null, confidence: 0 };
+}
+
+function detectFromSimpleText() {
+  const title = document.querySelector('h1.style-scope.ytd-watch-metadata yt-formatted-string')?.textContent?.toLowerCase() || '';
+  const channel = document.querySelector('#channel-name a, .ytd-channel-name a')?.textContent?.toLowerCase() || '';
+  
+  // Spanish detection
+  if (/\b(el|la|de|que|y|en|un|es|se|no|te|lo|muy|pero|como|todo|también|hasta|desde|cuando|donde|porque|si|solo|ya|español|spain)\b/g.test(`${title} ${channel}`)) {
+    return { language: 'Spanish', confidence: 'medium' as const };
+  }
+
+  // French detection
+  if (/\b(le|la|les|de|du|des|et|ou|en|avec|par|pour|comme|que|se|lui|ce|un|une|est|sont|mais|si|non|très|plus|tout|français|france)\b/g.test(`${title} ${channel}`)) {
+    return { language: 'French', confidence: 'medium' as const };
+  }
+
+  return { language: null, confidence: 'low' as const };
+}
+
+// Generate enhanced prompt with language consistency
+export function getEnhancedLanguagePrompt(detailLevel: string, languageResult: LanguageDetectionResult): string {
+  const { detectedLanguage, confidence, sources } = languageResult;
+  
+  return `ABSOLUTE LANGUAGE REQUIREMENT: Write EVERYTHING in ${detectedLanguage}. Every single word must be in ${detectedLanguage}.
+
+DETECTED LANGUAGE: ${detectedLanguage}
+Detection confidence: ${confidence}
+Sources used: ${sources.join(', ')}
+
+CRITICAL INSTRUCTIONS:
+- Use ONLY ${detectedLanguage} for the entire response
+- ALL headers, content, and conclusions must be in ${detectedLanguage}
+- NO English words or phrases allowed (unless target language is English)
+- Complete the summary with a proper conclusion in ${detectedLanguage}
 
 ${detailLevel === 'quick' ? 
-  `Provide a concise summary (200-300 words) in ${detectedLanguage} with clear structure.` : 
-  `Provide a detailed analysis (500-700 words) in ${detectedLanguage} with comprehensive coverage.`}
+  `Create a concise summary (200-300 words) entirely in ${detectedLanguage}.` : 
+  `Create a comprehensive analysis (500-700 words) entirely in ${detectedLanguage}.`}
 
-Structure your response with clear sections but write EVERYTHING in ${detectedLanguage}.`;
+Structure your response with clear sections in ${detectedLanguage} and end with a complete conclusion in ${detectedLanguage}.
 
-  return basePrompt;
+FINAL VERIFICATION: Before responding, ensure every word is in ${detectedLanguage}.`;
 }
