@@ -1,11 +1,21 @@
-
 // YouTube Enhancer Background Script with Modern Chrome Authentication
 console.log('🚀 YouTube Enhancer background script loaded');
+
+// OAuth 2.0 constants
+const CLIENT_ID = '304162096302-st2sml4kkd7cus7646fqun8ada31lgus.apps.googleusercontent.com';
+const REDIRECT_URL = chrome.identity.getRedirectURL();
+const SCOPES = [
+  'https://www.googleapis.com/auth/youtube.readonly',
+  'https://www.googleapis.com/auth/youtube.force-ssl',
+  'https://www.googleapis.com/auth/userinfo.profile',
+  'https://www.googleapis.com/auth/userinfo.email'
+];
 
 // Set up extension installation/startup
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
     console.log('📦 Extension installed successfully');
+    console.log('🔗 OAuth Redirect URL:', REDIRECT_URL);
   }
 });
 
@@ -13,17 +23,17 @@ chrome.runtime.onInstalled.addListener((details) => {
 async function authenticateWithYouTube() {
   try {
     console.log('🔐 Starting YouTube authentication with Chrome Identity API...');
+    console.log('🆔 Client ID:', CLIENT_ID);
+    console.log('🔗 Redirect URL:', REDIRECT_URL);
+    console.log('📝 Scopes:', SCOPES);
     
     // Clear any existing tokens first
     await chrome.storage.local.remove(['userToken', 'userInfo']);
     
-    // Use Chrome's built-in authentication
+    // Use Chrome's built-in authentication with explicit scopes
     const token = await chrome.identity.getAuthToken({
       interactive: true,
-      scopes: [
-        'https://www.googleapis.com/auth/youtube.readonly',
-        'https://www.googleapis.com/auth/youtube.force-ssl'
-      ]
+      scopes: SCOPES
     });
     
     if (!token) {
