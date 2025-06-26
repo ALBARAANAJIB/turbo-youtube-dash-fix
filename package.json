@@ -54,7 +54,6 @@
     "sonner": "^2.0.5",
     "tailwind-merge": "^2.5.2",
     "vaul": "^1.1.2",
-    "youtube-transcript": "^1.2.1",
     "youtube-transcript-api": "^2.0.4"
   },
   "devDependencies": {
