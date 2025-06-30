@@ -5,7 +5,13 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { spawn } = require('child_process'); // NEW: For running Python script
 const path = require('path'); // NEW: For resolving Python script path
 
-const router = express.Router();
+
+// Export a function that takes 'pool' as an argument
+// This is the CRITICAL change to pass the database connection
+module.exports = (pool) => { // <--- THIS IS THE START OF THE EXPORTED FUNCTION
+
+    // 🌟🌟🌟 CRITICAL: Define 'router' HERE, INSIDE this function 🌟🌟🌟
+    const router = express.Router(); 
 
 // Debug API key loading
 console.log('🔑 API Key loaded:', process.env.GOOGLE_AI_API_KEY ? 'Yes (length: ' + process.env.GOOGLE_AI_API_KEY.length + ')' : 'No');
@@ -16,31 +22,39 @@ if (!process.env.GOOGLE_AI_API_KEY) {
   console.error('💡 Please check your .env file in the backend directory');
 }
 
-// Initialize Gemini AI client
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
 
-// Input validation middleware
-const validateSummaryRequest = (req, res, next) => {
-  const { videoUrl } = req.body;
-  
-  if (!videoUrl) {
-    return res.status(400).json({ 
-      error: 'Missing required field: videoUrl' 
-    });
-  }
-  
-  // Updated regex to be more robust for various YouTube URL formats, including your custom ones
-  // It now specifically includes 'youtube.com' and 'youtu.be' as well as your custom domains
-  const youtubeUrlRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/|http:\/\/googleusercontent\.com\/youtube\.com\/(?:3|4|5)\/)([^"&?\/\s]{11})/;
-  if (!youtubeUrlRegex.test(videoUrl)) {
-    return res.status(400).json({ 
-      error: 'Invalid YouTube URL format. Please provide a valid YouTube video URL.' 
-    });
-  }
-  
-  next();
-};
+  // Initialize Gemini AI client (keep this)
+    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
 
+
+   // Input validation middleware (keep this, but we'll add userId later)
+    const validateSummaryRequest = (req, res, next) => {
+        const { videoUrl } = req.body; // <--- We'll add userId here later
+        if (!videoUrl) {
+            return res.status(400).json({ 
+                error: 'Missing required field: videoUrl'
+            });
+        }
+
+        
+     // 🌟🌟🌟 CORRECTED REGEX: Removed redundant backslashes 🌟🌟🌟
+        // Note: Single backslashes are used here because it's a regex literal (between //)
+        const youtubeUrlRegex = /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*(?:[?&]v=)|shorts\/)|youtu\.be\/|http:\/\/googleusercontent\.com\/youtube\.com\/(?:3|4|5)\/)([a-zA-Z0-9_-]{11})/;
+        const match = videoUrl.match(youtubeUrlRegex);
+
+        if (!match) { // Check if URL matches regex
+            return res.status(400).json({ 
+                error: 'Invalid YouTube video URL format. Please provide a valid YouTube video URL.' 
+            });
+        }
+
+        req.videoId = match[1]; // Extract video ID and attach to request
+        next(); // Proceed to the next middleware/route handler
+    };
+
+
+
+    
 // Extract video ID from YouTube URL
 function extractVideoId(url) {
   // Same regex as in validateSummaryRequest to ensure consistency
@@ -51,7 +65,7 @@ function extractVideoId(url) {
 
 // Create optimized single prompt for all summaries
 function createUniversalPrompt(transcriptText, videoLanguage = 'English') {
-  return `You are an expert video content analyzer. Please create a comprehensive summary of this video transcript in ${videoLanguage}.
+  return `You are an expert video content analyzer. (but don't mention this in the summary to be displayed!). Please create a comprehensive summary of this video transcript in ${videoLanguage}.
 
 TRANSCRIPT:
 ${transcriptText}
@@ -309,4 +323,5 @@ router.get('/test', async (req, res) => {
   }
 });
 
-module.exports = router;
+
+return router; }; // <--- THIS IS THE END OF THE EXPORTED FUNCTION
