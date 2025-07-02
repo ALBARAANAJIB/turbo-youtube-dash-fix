@@ -4,19 +4,7 @@
 const API_BASE_URL = 'http://localhost:3000/api';
 
 // Generate or get user ID for rate limiting
-function getUserId() {
-  // Try to get existing user ID from storage
-  let userId = localStorage.getItem('youtube-enhancer-user-id');
-  
-  if (!userId) {
-    // Generate new user ID (simple UUID-like string)
-    userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    localStorage.setItem('youtube-enhancer-user-id', userId);
-    console.log('🆔 Generated new user ID:', userId);
-  }
-  
-  return userId;
-}
+
 
 function injectSummarizationPanel() {
   // Check if we're on a YouTube video page
@@ -199,74 +187,71 @@ function injectSummarizationPanel() {
 }
 
 // Secure backend API call with userId
+// In frontend/content.js
 async function summarizeVideo(videoUrl, loadingMessage, contentDiv, loadingDiv, summarizeBtn) {
-  try {
-    loadingMessage.textContent = 'Connecting to backend...';
-    
-    const userId = getUserId(); // Get user ID for rate limiting
-    
-    console.log('🔗 Making API request to backend:', API_BASE_URL);
-    console.log('🎯 Video URL:', videoUrl);
-    console.log('🆔 User ID:', userId);
-    
-    const response = await fetch(`${API_BASE_URL}/summary/youtube`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        videoUrl: videoUrl,
-        userId: userId // NEW: Send user ID for rate limiting
-      })
-    });
+    // ... (existing variable declarations)
 
-    loadingMessage.textContent = 'Processing with AI...';
+    // Clear previous summary and show loading
+    summaryOutput.innerHTML = '';
+    loadingMessage.style.display = 'block';
+    summarizeBtn.disabled = true;
+    summaryPanel.style.height = 'auto'; // Reset height for new content
 
-    console.log('📡 Response status:', response.status);
-    console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
+    try {
+        // Retrieve userId from Chrome storage
+        const storage = await chrome.storage.local.get('userId');
+        const userId = storage.userId;
 
-    if (!response.ok) {
-      let errorData;
-      const contentType = response.headers.get('content-type');
-      
-      if (contentType && contentType.includes('application/json')) {
-        errorData = await response.json();
-        
-        // Handle rate limit specifically
-        if (response.status === 403 && errorData.limitReached) {
-          showRateLimitError(contentDiv, loadingDiv, summarizeBtn, errorData);
-          return;
+        if (!userId) {
+            // If userId is not found, it means the user is not authenticated.
+            // Prompt them to authenticate or inform them about the requirement.
+            showError('Authentication required. Please authenticate via the extension popup to use summarization.');
+            return;
         }
-      } else {
-        const textResponse = await response.text();
-        console.error('❌ Non-JSON response:', textResponse);
-        errorData = { error: `Server returned HTML instead of JSON. Status: ${response.status}` };
-      }
-      
-      throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
-    }
 
-    const data = await response.json();
-    console.log('✅ Backend response received:', data);
-    
-    if (data.success && data.summary) {
-      showSuccess(contentDiv, loadingDiv, summarizeBtn, data.summary, data.metadata, data.rateLimitInfo);
-    } else {
-      throw new Error(data.error || 'No summary received from backend');
+        const response = await fetch(`${API_BASE_URL}/summary/youtube`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                videoUrl: videoUrl,
+                userId: userId // <--- CRUCIAL: Send the userId to the backend
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            // Handle specific error codes from the backend
+            if (data.code === 'LIMIT_REACHED') {
+                showError('You have reached your daily summary limit. Upgrade to Pioneer Access for unlimited summaries!');
+                // Optionally, display a button or link to an "upgrade" page/message here
+            } else if (data.code === 'TRANSCRIPT_TOO_LONG') {
+                 showError('This video transcript is too long to summarize. Please try a shorter video.');
+            } else if (data.code === 'TRANSCRIPT_FETCH_FAILED') {
+                showError('Could not fetch video transcript. It might be unavailable or private.');
+            } else if (data.code === 'API_KEY_MISSING') {
+                 showError('Summarization service is temporarily unavailable. Please try again later.');
+            }
+            else {
+                showError(data.error || 'Failed to summarize video. Please try again.');
+            }
+            return; // Stop execution on error
+        }
+
+        // ... (rest of your success handling for summarization)
+
+    } catch (error) {
+        console.error('❌ Error during summarization fetch:', error);
+        showError('An error occurred during summarization. Please check your internet connection or try again later.');
+    } finally {
+        loadingMessage.style.display = 'none';
+        summarizeBtn.disabled = false;
     }
-    
-  } catch (error) {
-    console.error('❌ Backend API error:', error);
-    
-    if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-      throw new Error(`🔌 Cannot connect to backend at: ${API_BASE_URL}\n\nMake sure your backend is running:\n- Local: npm start in backend folder\n- Railway: Check deployment status`);
-    } else if (error.message.includes('HTML instead of JSON')) {
-      throw new Error(`🏗️ Backend is returning HTML (probably an error page).\n\nCheck:\n- Backend logs for errors\n- Environment variables (GOOGLE_AI_API_KEY)\n- Endpoint URL: ${API_BASE_URL}`);
-    } else {
-      throw error;
-    }
-  }
 }
+
+// ... (rest of your content.js file)
 
 // NEW: Show rate limit error with upgrade message
 function showRateLimitError(contentDiv, loadingDiv, summarizeBtn, errorData) {

@@ -91,242 +91,124 @@ module.exports = (pool) => {
     }
 
     // Main YouTube video summarization endpoint - NOW WITH RATE LIMITING
-    router.post('/youtube', validateSummaryRequest, async (req, res) => {
-        try {
-            // Check API key again before processing
-            if (!process.env.GOOGLE_AI_API_KEY) {
-                return res.status(500).json({
-                    success: false,
-                    error: 'API key not configured on server'
-                });
-            }
+    // In backend/routes/summary.js
+// ... (after genAI initialization and validateSummaryRequest middleware)
 
-            const { videoUrl } = req.body;
-            const userId = req.userId; // From middleware
-            const videoId = extractVideoId(videoUrl);
-            
-            console.log(`📹 Processing video: ${videoUrl} for user: ${userId}`);
-            console.log(`🆔 Video ID extracted: ${videoId}`);
-            
-            if (!videoId) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Could not extract video ID from URL'
-                });
-            }
+// Main summarization endpoint
+router.post('/youtube', async (req, res) => {
+    const { videoUrl, userId } = req.body; // userId is now expected from frontend
 
-            // NEW: Check user rate limits before processing
-            const rateLimitCheck = await userManager.canMakeSummaryRequest(userId, 3);
-            
-            if (!rateLimitCheck.canProceed) {
+    // Basic validation (already in validateSummaryRequest, but good to have a fallback)
+    if (!videoUrl || !userId) {
+        return res.status(400).json({
+            success: false,
+            error: 'Missing required fields: videoUrl or userId'
+        });
+    }
+
+    let user; // Declare user variable outside try block for wider scope if needed
+    try {
+        // Step 1: Get or create the user in the database
+        user = await userManager.getOrCreateUser(userId);
+
+        // Step 2: Check if the user is a pioneer (currently always FALSE as per our plan)
+        const isPioneer = user.is_pioneer;
+
+        // Step 3: Implement free tier limits for non-pioneer users (ACTIVE NOW)
+        if (!isPioneer) {
+            const canSummarize = await userManager.canMakeSummaryRequest(userId, 3); // 3 summaries per day free limit
+
+            if (!canSummarize) {
+                console.log(`❌ User ${userId} has reached their daily summary limit.`);
                 return res.status(403).json({
                     success: false,
-                    error: 'Daily summary limit reached',
-                    message: 'You have reached your daily limit of 3 free summaries. Upgrade to Pioneer for unlimited access!',
-                    limitReached: true,
-                    isPioneer: false,
-                    remainingCount: 0
+                    error: 'Daily summary limit reached. Consider upgrading for unlimited access!',
+                    code: 'LIMIT_REACHED' // Custom error code for frontend
                 });
             }
-
-            // --- NEW: Call Python Script for Transcript Fetching ---
-            let fullTranscript = '';
-            try {
-                console.log('📝 Calling Python script to fetch video transcript...');
-                const pythonScriptPath = path.join(__dirname, '..', 'scripts', 'script.py');
-                const pythonExecutablePath = path.join(__dirname, '..', 'scripts', 'transcript-env', 'bin', 'python');
-                const pythonProcess = spawn(pythonExecutablePath, [pythonScriptPath, videoId]);
-
-                let pythonOutput = '';
-                let pythonErrorOutput = '';
-
-                pythonProcess.stdout.on('data', (data) => {
-                    pythonOutput += data.toString();
-                });
-
-                pythonProcess.stderr.on('data', (data) => {
-                    pythonErrorOutput += data.toString();
-                });
-
-                await new Promise((resolve, reject) => {
-                    pythonProcess.on('close', (code) => {
-                        if (code === 0) {
-                            fullTranscript = pythonOutput.trim();
-                            resolve();
-                        } else {
-                            console.error(`❌ Python script exited with code ${code}. Error: ${pythonErrorOutput || 'No error output from Python'}`);
-                            reject(new Error(`Failed to fetch transcript (Python error): ${pythonErrorOutput || 'Unknown Python error'}`));
-                        }
-                    });
-                    pythonProcess.on('error', (err) => {
-                        console.error(`❌ Failed to start Python process: ${err.message}`);
-                        reject(new Error(`Backend script error: ${err.message}. Is Python installed and in your PATH?`));
-                    });
-                });
-
-                if (!fullTranscript) {
-                    throw new Error('Python script returned no transcript data.');
-                }
-
-                console.log(`📄 Transcript fetched by Python: ${fullTranscript.length} characters`);
-
-            } catch (transcriptError) {
-                console.error(`❌ Error fetching transcript via Python for ${videoId}:`, transcriptError);
-                return res.status(500).json({
-                    success: false,
-                    error: 'Could not fetch video transcript. It might be unavailable, private, or the backend script failed.',
-                    details: transcriptError.message
-                });
-            }
-
-            // Apply transcript length validation
-            let processedTranscript;
-            try {
-                processedTranscript = validateTranscriptLength(fullTranscript);
-            } catch (lengthError) {
-                if (lengthError.message === 'TRANSCRIPT_TOO_LONG') {
-                    return res.status(413).json({
-                        success: false,
-                        error: 'This video is too long to summarize. Please try a shorter video.',
-                        details: 'Transcript exceeds maximum processing length for the model.'
-                    });
-                } else {
-                    throw lengthError;
-                }
-            }
-
-            // Detect language from transcript (simple heuristic)
-            const detectLanguage = (text) => {
-                const sampleText = text.substring(0, Math.min(500, text.length)).toLowerCase();
-                if (/\b(the|and|is|are|was|were|you|your|this|that|it|to)\b/.test(sampleText)) {
-                    return 'English';
-                } else if (/\b(el|la|es|son|fue|fueron|tu|su|este|esta|un|una)\b/.test(sampleText)) {
-                    return 'Spanish';
-                } else if (/\b(le|la|est|sont|était|étaient|tu|votre|ce|cette|un|une)\b/.test(sampleText)) {
-                    return 'French';
-                } else if (/\b(der|die|das|ist|und|auf|ein|eine)\b/.test(sampleText)) {
-                    return 'German';
-                } else if (/\b(da|e|il|a|di|che)\b/.test(sampleText)) {
-                    return 'Italian';
-                }
-                return 'English';
-            };
-
-            const videoLanguage = detectLanguage(processedTranscript);
-            console.log(`🌍 Detected language: ${videoLanguage}`);
-
-            console.log('🤖 Sending transcript to Gemini for summarization...');
-
-            // Use Gemini to summarize the transcript
-            const model = genAI.getGenerativeModel({
-                model: "gemini-2.5-flash",
-                generationConfig: {
-                    temperature: 0.3,
-                    topP: 0.8,
-                    topK: 40,
-                    maxOutputTokens: 8000,
-                }
-            });
-
-            const prompt = createUniversalPrompt(processedTranscript, videoLanguage);
-            const result = await model.generateContent(prompt);
-
-            console.log('DEBUG: Gemini result object:', JSON.stringify(result, null, 2));
-            const response = await result.response;
-            console.log('DEBUG: Gemini response object:', JSON.stringify(response, null, 2));
-
-            if (!response || !response.text()) {
-                if (response && typeof response.text === 'function') {
-                    const textContent = response.text();
-                    if (textContent === null || textContent.trim() === '') {
-                        console.error('DEBUG: Gemini response.text() returned null or empty string.');
-                    }
-                } else {
-                    console.error('DEBUG: Gemini response object is null/undefined or missing text() method.');
-                }
-                throw new Error('No valid response received from Gemini (or empty summary).');
-            }
-
-            const summary = response.text();
-            console.log(`📝 Summary generated: ${summary ? summary.length : 0} characters`);
-
-            if (!summary || summary.trim().length < 20) {
-                throw new Error('Generated summary is too short or empty. Adjust prompt or model settings.');
-            }
-
-            // NEW: Increment user's daily summary count after successful summarization
-            await userManager.incrementSummaryCount(userId);
-
-            console.log(`✅ Summary generated successfully (${summary.length} characters)`);
-
-            // Return successful response with rate limit info
-            res.json({
-                success: true,
-                summary: summary,
-                rateLimitInfo: {
-                    isPioneer: rateLimitCheck.isPioneer,
-                    remainingCount: rateLimitCheck.remainingCount - 1, // Subtract 1 since we just used one
-                    dailyLimit: rateLimitCheck.isPioneer ? -1 : 3
-                },
-                metadata: {
-                    videoUrl,
-                    videoId,
-                    summaryLength: summary.length,
-                    transcriptLength: fullTranscript.length,
-                    processedTranscriptLength: processedTranscript.length,
-                    detectedLanguage: videoLanguage,
-                    model: "gemini-2.5-flash",
-                    timestamp: new Date().toISOString(),
-                    method: "python-transcript-node-gemini-summarization"
-                }
-            });
-
-        } catch (error) {
-            console.error('🔥 Global error during summarization process:', error);
-            res.status(500).json({
-                success: false,
-                error: 'An unexpected server error occurred during summarization.',
-                details: process.env.NODE_ENV === 'development' ? error.message : undefined
-            });
+            // If canSummarize is true, incrementSummaryCount is handled within canMakeSummaryRequest
         }
-    });
 
-    // NEW: Get user stats endpoint
-    router.get('/user/:userId/stats', async (req, res) => {
-        try {
-            const { userId } = req.params;
-            const stats = await userManager.getUserStats(userId);
-            res.json({
-                success: true,
-                stats: stats
+        // Step 4: Proceed with YouTube transcript fetching
+        const pythonScriptPath = path.join(__dirname, '..', 'python', 'script.py'); // Adjust path as needed
+        let transcript = '';
+
+        const pythonProcess = spawn('python3', [pythonScriptPath, videoUrl]);
+
+        pythonProcess.stdout.on('data', (data) => {
+            transcript += data.toString();
+        });
+
+        pythonProcess.stderr.on('data', (data) => {
+            console.error(`stderr: ${data}`);
+        });
+
+        await new Promise((resolve, reject) => {
+            pythonProcess.on('close', (code) => {
+                if (code !== 0) {
+                    console.error(`Python script exited with code ${code}`);
+                    return reject(new Error('Failed to fetch transcript from YouTube.'));
+                }
+                resolve();
             });
-        } catch (error) {
-            console.error('❌ Error getting user stats:', error);
-            res.status(500).json({
-                success: false,
-                error: 'Failed to get user statistics'
-            });
+        });
+
+        // Step 5: Validate and summarize the transcript
+        const validatedTranscript = validateTranscriptLength(transcript); // Use the updated function below
+        console.log(`Transcripts fetched, length: ${validatedTranscript.length}`);
+
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const prompt = `Summarize the following YouTube video transcript. Focus on key ideas, main arguments, and important conclusions. The summary should be concise and no longer than 500 words:\n\n${validatedTranscript}`;
+
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const geminiResponse = response.text();
+
+        res.json({
+            success: true,
+            summary: geminiResponse,
+            model: "gemini-2.5-flash",
+            method: "transcript-based-summarization"
+        });
+
+    } catch (error) {
+        console.error('🔥 Global error during summarization process:', error);
+        let errorMessage = 'An unexpected server error occurred during summarization.';
+        let errorCode = 'SERVER_ERROR';
+
+        if (error.message.includes('TRANSCRIPT_TOO_LONG')) {
+            errorMessage = 'Video transcript is too long to summarize.';
+            errorCode = 'TRANSCRIPT_TOO_LONG';
+        } else if (error.message.includes('Failed to fetch transcript')) {
+            errorMessage = 'Could not fetch video transcript. It might be unavailable or private.';
+            errorCode = 'TRANSCRIPT_FETCH_FAILED';
+        } else if (error.message.includes('API key not configured')) {
+             errorMessage = 'API key for summarization is not configured on the backend.';
+             errorCode = 'API_KEY_MISSING';
         }
-    });
+
+        res.status(500).json({
+            success: false,
+            error: errorMessage,
+            code: errorCode,
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+});
+
+// ... (Existing test endpoint and upgrade-user endpoint)
 
     // NEW: Upgrade user to pioneer endpoint (for testing/admin)
-    router.post('/user/:userId/upgrade', async (req, res) => {
-        try {
-            const { userId } = req.params;
-            const upgradedUser = await userManager.upgradeToPioneer(userId);
-            res.json({
-                success: true,
-                message: 'User upgraded to Pioneer status',
-                user: upgradedUser
-            });
-        } catch (error) {
-            console.error('❌ Error upgrading user:', error);
-            res.status(500).json({
-                success: false,
-                error: 'Failed to upgrade user'
-            });
-        }
+   router.post('/upgrade-user', async (req, res) => {
+    // For launch: Keep this endpoint returning a "coming soon" message
+    return res.status(200).json({
+        success: false,
+        message: 'Pioneer Access is a limited-time offer coming soon to early supporters!',
+        code: 'FEATURE_INACTIVE'
     });
+
+    // ... (The actual upgrade logic, commented out or removed for now)
+});
 
     // Test endpoint for API connectivity (keep as is)
     router.get('/test', async (req, res) => {
