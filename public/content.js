@@ -1,9 +1,10 @@
 // Enhanced YouTube extension with secure backend integration
 
 // 🔥 IMPORTANT: Backend URL Configuration 🔥
-// For LOCAL DEVELOPMENT: Use 'http://localhost:3000/api'
-// For PRODUCTION: Use your Railway URL 'https://friendly-message-sandbox-app-production.up.railway.app/api'
-const API_BASE_URL = 'http://localhost:3000/api'; // 👈 SET TO LOCAL FOR DEVELOPMENT
+const API_BASE_URL = 'http://localhost:3000/api';
+
+// Generate or get user ID for rate limiting
+
 
 function injectSummarizationPanel() {
   // Check if we're on a YouTube video page
@@ -74,6 +75,18 @@ function injectSummarizationPanel() {
           padding: 2px 6px;
           border-radius: 3px;
         ">Backend: ${API_BASE_URL.includes('localhost') ? 'Local' : 'Railway'}</div>
+      </div>
+      
+      <!-- Rate Limit Info -->
+      <div id="rate-limit-info" style="
+        display: none;
+        background: #fef3c7;
+        color: #92400e;
+        padding: 12px 16px;
+        font-size: 12px;
+        border-bottom: 1px solid #f59e0b;
+      ">
+        <span id="rate-limit-text"></span>
       </div>
       
       <!-- Content -->
@@ -173,68 +186,131 @@ function injectSummarizationPanel() {
   });
 }
 
-// Secure backend API call
+// Fixed summarizeVideo function with proper variable handling
 async function summarizeVideo(videoUrl, loadingMessage, contentDiv, loadingDiv, summarizeBtn) {
-  try {
-    loadingMessage.textContent = 'Connecting to backend...';
-    
-    console.log('🔗 Making API request to backend:', API_BASE_URL);
-    console.log('🎯 Video URL:', videoUrl);
-    
-    const response = await fetch(`${API_BASE_URL}/summary/youtube`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        videoUrl: videoUrl
-      })
-    });
+    // Clear previous content and show loading
+    contentDiv.innerHTML = '';
+    contentDiv.style.display = 'none';
+    loadingDiv.style.display = 'block';
+    summarizeBtn.disabled = true;
 
-    loadingMessage.textContent = 'Processing with AI...';
+    try {
+        // Retrieve userId from Chrome storage
+        const storage = await chrome.storage.local.get('userId');
+        const userId = storage.userId;
 
-    console.log('📡 Response status:', response.status);
-    console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
+        if (!userId) {
+            showError(contentDiv, loadingDiv, summarizeBtn, 'Authentication required. Please authenticate via the extension popup to use summarization.');
+            return;
+        }
 
-    if (!response.ok) {
-      let errorData;
-      const contentType = response.headers.get('content-type');
-      
-      if (contentType && contentType.includes('application/json')) {
-        errorData = await response.json();
-      } else {
-        const textResponse = await response.text();
-        console.error('❌ Non-JSON response:', textResponse);
-        errorData = { error: `Server returned HTML instead of JSON. Status: ${response.status}` };
-      }
-      
-      throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+        const response = await fetch(`${API_BASE_URL}/summary/youtube`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                videoUrl: videoUrl,
+                userId: userId
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            // Handle specific error codes from the backend
+            if (data.code === 'LIMIT_REACHED') {
+                showRateLimitError(contentDiv, loadingDiv, summarizeBtn, data);
+            } else if (data.code === 'TRANSCRIPT_TOO_LONG') {
+                showError(contentDiv, loadingDiv, summarizeBtn, 'This video transcript is too long to summarize. Please try a shorter video.');
+            } else if (data.code === 'TRANSCRIPT_FETCH_FAILED') {
+                showError(contentDiv, loadingDiv, summarizeBtn, 'Could not fetch video transcript. It might be unavailable or private.');
+            } else if (data.code === 'API_KEY_MISSING') {
+                showError(contentDiv, loadingDiv, summarizeBtn, 'Summarization service is temporarily unavailable. Please try again later.');
+            } else {
+                showError(contentDiv, loadingDiv, summarizeBtn, data.error || 'Failed to summarize video. Please try again.');
+            }
+            return;
+        }
+
+        // Handle successful response
+        showSuccess(contentDiv, loadingDiv, summarizeBtn, data.summary, data.metadata, data.rateLimitInfo);
+
+    } catch (error) {
+        console.error('❌ Error during summarization fetch:', error);
+        showError(contentDiv, loadingDiv, summarizeBtn, 'An error occurred during summarization. Please check your internet connection or try again later.');
+    } finally {
+        loadingDiv.style.display = 'none';
+        summarizeBtn.disabled = false;
     }
-
-    const data = await response.json();
-    console.log('✅ Backend response received:', data);
-    
-    if (data.success && data.summary) {
-      showSuccess(contentDiv, loadingDiv, summarizeBtn, data.summary, data.metadata);
-    } else {
-      throw new Error(data.error || 'No summary received from backend');
-    }
-    
-  } catch (error) {
-    console.error('❌ Backend API error:', error);
-    
-    if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-      throw new Error(`🔌 Cannot connect to backend at: ${API_BASE_URL}\n\nMake sure your backend is running:\n- Local: npm start in backend folder\n- Railway: Check deployment status`);
-    } else if (error.message.includes('HTML instead of JSON')) {
-      throw new Error(`🏗️ Backend is returning HTML (probably an error page).\n\nCheck:\n- Backend logs for errors\n- Environment variables (GOOGLE_AI_API_KEY)\n- Endpoint URL: ${API_BASE_URL}`);
-    } else {
-      throw error;
-    }
-  }
 }
 
-function showSuccess(contentDiv, loadingDiv, summarizeBtn, summary, metadata) {
+// NEW: Show rate limit error with upgrade message
+function showRateLimitError(contentDiv, loadingDiv, summarizeBtn, errorData) {
   loadingDiv.style.display = 'none';
+  
+  contentDiv.innerHTML = `
+    <div style="
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    ">
+      <div style="
+        font-size: 24px;
+        margin-bottom: 12px;
+      ">⏰</div>
+      <div style="
+        font-weight: 600; 
+        margin-bottom: 8px; 
+        font-size: 14px;
+        color: #dc2626;
+      ">Daily Limit Reached</div>
+      <div style="
+        font-size: 13px; 
+        line-height: 1.5; 
+        color: #991b1b;
+        margin-bottom: 16px;
+      ">${errorData.message}</div>
+      <div style="
+        background: #fbbf24;
+        color: #92400e;
+        padding: 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        margin-bottom: 16px;
+        font-weight: 500;
+      ">
+        🌟 Upgrade to Pioneer Access for unlimited summaries!
+      </div>
+      <button onclick="document.getElementById('summarize-video-btn').style.display='block'; document.getElementById('summary-content').style.display='none';" style="
+        background: #f9fafb;
+        color: #374151;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        padding: 8px 16px;
+        font-size: 12px;
+        cursor: pointer;
+        font-weight: 500;
+        font-family: inherit;
+      ">Try Again Tomorrow</button>
+    </div>
+  `;
+  
+  contentDiv.style.display = 'block';
+}
+
+function showSuccess(contentDiv, loadingDiv, summarizeBtn, summary, metadata, rateLimitInfo) {
+  loadingDiv.style.display = 'none';
+  
+  // Show rate limit info if user is not pioneer
+  if (rateLimitInfo && !rateLimitInfo.isPioneer) {
+    const rateLimitElement = document.getElementById('rate-limit-info');
+    const rateLimitText = document.getElementById('rate-limit-text');
+    rateLimitText.textContent = `Free tier: ${rateLimitInfo.remainingCount} summaries remaining today`;
+    rateLimitElement.style.display = 'block';
+  }
   
   contentDiv.innerHTML = `
     <div style="
@@ -255,6 +331,11 @@ function showSuccess(contentDiv, loadingDiv, summarizeBtn, summary, metadata) {
         <span style="font-size: 10px; color: #6b7280; background: #f3f4f6; padding: 2px 6px; border-radius: 3px;">
           ✓ ${metadata?.detectedLanguage || 'Auto'}
         </span>
+        ${rateLimitInfo && !rateLimitInfo.isPioneer ? 
+          `<span style="font-size: 10px; color: #dc2626; background: #fef2f2; padding: 2px 6px; border-radius: 3px;">
+            ${rateLimitInfo.remainingCount} left
+          </span>` : ''
+        }
         <button id="copy-summary" style="
           background: #ffffff;
           color: #374151;
@@ -397,6 +478,7 @@ function showError(contentDiv, loadingDiv, summarizeBtn, errorMessage) {
   summarizeBtn.style.display = 'block';
 }
 
+// ... keep existing code (liked videos functions and initialization code)
 function injectLikedVideosButtons() {
   if (!window.location.href.includes('youtube.com/playlist?list=LL')) {
     return;
@@ -407,7 +489,6 @@ function injectLikedVideosButtons() {
     existingButtons.remove();
   }
 
-  // Wait for the playlist header to load
   const playlistHeader = document.querySelector('#header.ytd-playlist-header-renderer');
   if (!playlistHeader) {
     setTimeout(injectLikedVideosButtons, 1000);
@@ -475,7 +556,6 @@ function injectLikedVideosButtons() {
 
   playlistHeader.appendChild(buttonContainer);
 
-  // Add event listeners
   document.getElementById('fetch-liked-videos')?.addEventListener('click', () => {
     if (window.chrome?.runtime) {
       window.chrome.runtime.sendMessage({ action: 'fetchLikedVideos' });
