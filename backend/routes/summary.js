@@ -130,7 +130,7 @@ router.post('/youtube', async (req, res) => {
         }
 
         // Step 4: Proceed with YouTube transcript fetching
-        const pythonScriptPath = path.join(__dirname, '..', 'python', 'script.py'); // Adjust path as needed
+        const pythonScriptPath = path.join(__dirname, '..', 'scripts', 'script.py'); // Adjust path as needed
         let transcript = '';
 
         const pythonProcess = spawn('python3', [pythonScriptPath, videoUrl]);
