@@ -26,43 +26,94 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 
 // FIXED: Modern Chrome Authentication with better token handling
-// In frontend/background.js
 async function authenticateWithYouTube() {
+  try {
+    console.log('🔐 Starting YouTube authentication with Chrome Identity API...');
+    
+    // Clear any existing tokens first
+    await chrome.storage.local.remove(['userToken', 'userInfo']);
+    
+    // Remove cached token to force fresh authentication
     try {
-        console.log('🔐 Starting YouTube authentication with Chrome Identity API...');
-
-        // Clear any existing tokens first
-        await chrome.storage.local.remove(['userToken', 'userInfo', 'userId']); // Add 'userId' here
-
-        const token = await new Promise((resolve, reject) => {
-            chrome.identity.getAuthToken({ interactive: true, scopes: SCOPES }, (token) => {
-                if (chrome.runtime.lastError || !token) {
-                    return reject(new Error(chrome.runtime.lastError?.message || 'Failed to get auth token.'));
-                }
-                resolve(token);
-            });
-        });
-
-        // Fetch user info using the token (from userinfo.profile and userinfo.email scopes)
-        const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-        if (!userInfoResponse.ok) {
-            throw new Error('Failed to fetch user info.');
-        }
-        const userInfo = await userInfoResponse.json();
-
-        // Store user ID for backend use - use userInfo.id as the stable identifier
-        await chrome.storage.local.set({ userToken: token, userInfo: userInfo, userId: userInfo.id }); // <--- CRUCIAL: Store userInfo.id
-        console.log('User authenticated and info stored:', userInfo);
-        return { success: true, user: userInfo };
-
-    } catch (error) {
-        console.error('❌ Authentication error:', error);
-        return { success: false, error: error.message };
+      const cachedToken = await chrome.identity.getAuthToken({ interactive: false });
+      if (cachedToken) {
+        await chrome.identity.removeCachedAuthToken({ token: cachedToken });
+      }
+    } catch (e) {
+      console.log('No cached token to remove');
     }
+    
+    // Use Chrome's built-in authentication with explicit scopes
+    const token = await chrome.identity.getAuthToken({
+      interactive: true,
+      scopes: SCOPES
+    });
+    
+    if (!token) {
+      throw new Error('Authentication was cancelled or failed');
+    }
+    
+    // Ensure token is a string
+    const accessToken = typeof token === 'string' ? token : token.token || '';
+    
+    if (!accessToken) {
+      throw new Error('No valid access token received');
+    }
+    
+    console.log('🎟️ Access token received:', accessToken.substring(0, 20) + '...');
+    
+    // Test the token by making a simple API call
+    const testResponse = await fetch(`${CHANNELS_ENDPOINT}?part=snippet&mine=true`, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    });
+    
+    if (!testResponse.ok) {
+      console.error('Token test failed:', testResponse.status);
+      throw new Error('Authentication token is invalid or expired');
+    }
+    
+    // Get user info from Google API
+    const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    });
+    
+    if (!userInfoResponse.ok) {
+      throw new Error('Failed to fetch user information');
+    }
+    
+    const userInfo = await userInfoResponse.json();
+    console.log('👤 User info received:', userInfo);
+    
+    // Store authentication data
+    await chrome.storage.local.set({
+      userToken: accessToken,
+      userInfo: userInfo,
+      tokenExpiry: Date.now() + (3600 * 1000) // 1 hour from now
+    });
+    
+    console.log('💾 Authentication data stored successfully');
+    
+    return {
+      success: true,
+      userInfo: userInfo,
+      message: 'Authentication successful!'
+    };
+    
+  } catch (error) {
+    console.error('❌ Authentication error:', error);
+    
+    // Clear any partial authentication data
+    await chrome.storage.local.remove(['userToken', 'userInfo', 'tokenExpiry']);
+    
+    return {
+      success: false,
+      error: error.message || 'Authentication failed'
+    };
+  }
 }
 
 // FIXED: Get the user's liked videos using multiple approaches with better error handling
