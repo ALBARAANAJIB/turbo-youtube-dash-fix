@@ -6,29 +6,62 @@ const { spawn } = require('child_process');
 const path = require('path');
 const UserManager = require('../utils/userManager');
 
-// Export a function that takes 'pool' as an argument
+// --- NEW HELPER FUNCTION: Extracts YouTube Video ID from a URL ---
+// This function is crucial because the 'youtube-transcript-api' Python library
+// expects only the video ID, not the full URL.
+function getYouTubeVideoId(url) {
+    // This regular expression safely extracts the 11-character video ID
+    // from various YouTube URL formats (watch, youtu.be, embed, etc.).
+    const regExp = /(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+    const match = url.match(regExp);
+    // If a match is found, return the captured video ID; otherwise, return null.
+    return (match && match[1]) ? match[1] : null;
+}
+// --- END NEW HELPER FUNCTION ---
+
+// --- NEW HELPER FUNCTION: Creates comprehensive AI prompt for summarization ---
+function createUniversalPrompt(transcriptText, videoLanguage = 'English') {
+    return `You are an expert video content analyzer. (but don't mention this in the summary to be displayed!). Please create a comprehensive summary of this video transcript in ${videoLanguage}.
+
+TRANSCRIPT:
+${transcriptText}
+
+SUMMARY REQUIREMENTS:
+- Write the entire summary in ${videoLanguage}
+- Create a well-structured summary with clear paragraphs
+- Include an overview of the main topic
+- List the key points and important information
+- Mention any notable examples or demonstrations
+- Provide clear conclusions and takeaways
+- Keep the summary informative but concise (300-500 words)
+- Use proper formatting with line breaks between sections
+
+Please provide a complete, professional summary that captures the essence of the video content.`;
+}
+// --- END NEW HELPER FUNCTION ---
+
+
 module.exports = (pool) => {
     const router = express.Router();
-    
-    // Initialize UserManager with database pool
+    // Initialize UserManager with the database pool to handle user-specific logic.
     const userManager = new UserManager(pool);
 
-    // Debug API key loading
+    // Debugging output for API key status. This helps confirm environment variable loading.
     console.log('🔑 API Key loaded:', process.env.GOOGLE_AI_API_KEY ? 'Yes (length: ' + process.env.GOOGLE_AI_API_KEY.length + ')' : 'No');
 
-    // Validate API key exists
+    // Critical check: If API key is missing, log an error to guide the developer.
     if (!process.env.GOOGLE_AI_API_KEY) {
         console.error('❌ GOOGLE_AI_API_KEY is not set in environment variables!');
         console.error('💡 Please check your .env file in the backend directory');
     }
 
-    // Initialize Gemini AI client
+    // Initialize the Google Generative AI client with the API key.
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
 
-    // Input validation middleware - NOW INCLUDES userId
+    // Middleware to validate incoming request body for required fields.
     const validateSummaryRequest = (req, res, next) => {
         const { videoUrl, userId } = req.body;
-        
+
         if (!videoUrl) {
             return res.status(400).json({ 
                 error: 'Missing required field: videoUrl'
@@ -37,180 +70,165 @@ module.exports = (pool) => {
 
         if (!userId) {
             return res.status(400).json({ 
-                error: 'Missing required field: userId'
+                error: 'Missing required field: userId' 
             });
         }
-
-        // Validate YouTube URL
-        const youtubeUrlRegex = /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*(?:[?&]v=)|shorts\/)|youtu\.be\/|http:\/\/googleusercontent\.com\/youtube\.com\/(?:3|4|5)\/)([a-zA-Z0-9_-]{11})/;
-        const match = videoUrl.match(youtubeUrlRegex);
-
-        if (!match) {
-            return res.status(400).json({ 
-                error: 'Invalid YouTube video URL format. Please provide a valid YouTube video URL.' 
-            });
-        }
-
-        req.videoId = match[1];
-        req.userId = userId;
+        // If all required fields are present, proceed to the next middleware/route handler.
         next();
     };
 
-    // Extract video ID from YouTube URL
-    function extractVideoId(url) {
-        const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/|http:\/\/googleusercontent\.com\/youtube\.com\/(?:3|4|5)\/)([^"&?\/\s]{11})/;
-        const match = url.match(regex);
-        return match ? match[1] : null;
-    }
+    // Main route for YouTube video summarization.
+    router.post('/youtube', validateSummaryRequest, async (req, res) => {
+        const { videoUrl, userId } = req.body;
+        console.log(`🎥 Received summary request for: ${videoUrl} from user: ${userId}`);
 
-    // Create optimized single prompt for all summaries
-    function createUniversalPrompt(transcriptText, videoLanguage = 'English') {
-        return `You are an expert video content analyzer. (but don't mention this in the summary to be displayed!). Please create a comprehensive summary of this video transcript in ${videoLanguage}.
-
-    TRANSCRIPT:
-    ${transcriptText}
-
-    SUMMARY REQUIREMENTS:
-    - Write the entire summary in ${videoLanguage}
-    - Create a well-structured summary with clear paragraphs
-    - Include an overview of the main topic
-    - List the key points and important information
-    - Mention any notable examples or demonstrations
-    - Provide clear conclusions and takeaways
-    - Keep the summary informative but concise (300-500 words)
-    - Use proper formatting with line breaks between sections
-
-    Please provide a complete, professional summary that captures the essence of the video content.`;
-    }
-
-    function validateTranscriptLength(transcript, maxLength = 100000) {
-        if (transcript.length > maxLength) {
-            throw new Error('TRANSCRIPT_TOO_LONG');
-        }
-        return transcript;
-    }
-
-    // Main YouTube video summarization endpoint - NOW WITH RATE LIMITING
-    // In backend/routes/summary.js
-// ... (after genAI initialization and validateSummaryRequest middleware)
-
-// Main summarization endpoint
-router.post('/youtube', async (req, res) => {
-    const { videoUrl, userId } = req.body; // userId is now expected from frontend
-
-    // Basic validation (already in validateSummaryRequest, but good to have a fallback)
-    if (!videoUrl || !userId) {
-        return res.status(400).json({
-            success: false,
-            error: 'Missing required fields: videoUrl or userId'
-        });
-    }
-
-    let user; // Declare user variable outside try block for wider scope if needed
-    try {
-        // Step 1: Get or create the user in the database
-        user = await userManager.getOrCreateUser(userId);
-
-        // Step 2: Check if the user is a pioneer (currently always FALSE as per our plan)
-        const isPioneer = user.is_pioneer;
-
-        // Step 3: Implement free tier limits for non-pioneer users (ACTIVE NOW)
-        if (!isPioneer) {
-            const canSummarize = await userManager.canMakeSummaryRequest(userId, 3); // 3 summaries per day free limit
-
-            if (!canSummarize) {
-                console.log(`❌ User ${userId} has reached their daily summary limit.`);
-                return res.status(403).json({
-                    success: false,
-                    error: 'Daily summary limit reached. Consider upgrading for unlimited access!',
-                    code: 'LIMIT_REACHED' // Custom error code for frontend
-                });
+        try {
+            // Step 1: User rate limiting and access control.
+            // Checks if the user is allowed to make a summary request based on their tier/limits.
+            const { canProceed, limitMessage } = await userManager.canMakeSummaryRequest(userId);
+            if (!canProceed) {
+                console.warn(`⚠️ User ${userId} limit reached. Message: ${limitMessage}`);
+                // If limit is reached, send a 403 Forbidden response.
+                return res.status(403).json({ success: false, code: 'LIMIT_REACHED', message: limitMessage });
             }
-            // If canSummarize is true, incrementSummaryCount is handled within canMakeSummaryRequest
-        }
 
-        // Step 4: Proceed with YouTube transcript fetching
-        const pythonScriptPath = path.join(__dirname, '..', 'python', 'script.py'); // Adjust path as needed
-        let transcript = '';
+            // --- CRITICAL CHANGE 1: Extract Video ID from URL ---
+            // This is the direct fix for the "invalid video id" error from the Python script.
+            // It ensures that only the 11-character video ID is passed to the Python library.
+            const videoId = getYouTubeVideoId(videoUrl);
+            if (!videoId) {
+                console.error('❌ Invalid YouTube URL provided:', videoUrl);
+                // If the URL is not valid or no ID can be extracted, return a 400 Bad Request.
+                return res.status(400).json({ success: false, code: 'INVALID_VIDEO_URL', message: 'Invalid YouTube video URL provided. Please ensure it is a valid YouTube video link.' });
+            }
+            console.log(`Extracted video ID: ${videoId}`);
+            // --- END CRITICAL CHANGE 1 ---
 
-        const pythonProcess = spawn('python3', [pythonScriptPath, videoUrl]);
+            // Step 2: Define paths for the Python script and its interpreter.
+            // `pythonScriptPath` points to your transcript fetching script.
+            const pythonScriptPath = path.join(__dirname, '..', 'scripts', 'script.py'); // Corrected in previous step.
 
-        pythonProcess.stdout.on('data', (data) => {
-            transcript += data.toString();
-        });
+            // --- CRITICAL CHANGE 2: Explicitly define Python Interpreter Path ---
+            // This is the robust way to handle the 'ModuleNotFoundError' and ensure
+            // Node.js uses the Python interpreter from your virtual environment.
+            // It makes your application more stable and less dependent on the shell's PATH.
+            const pythonInterpreter = process.platform === 'win32' 
+                ? path.join(__dirname, '..', 'scripts', 'transcript-env', 'Scripts', 'python.exe') // Path for Windows
+                : path.join(__dirname, '..', 'scripts', 'transcript-env', 'bin', 'python3');    // Path for Linux/macOS
+            // --- END CRITICAL CHANGE 2 ---
 
-        pythonProcess.stderr.on('data', (data) => {
-            console.error(`stderr: ${data}`);
-        });
+            let transcriptData = ''; // Stores the transcript output from Python.
+            let pythonError = '';    // Stores any errors from the Python script's stderr.
 
-        await new Promise((resolve, reject) => {
-            pythonProcess.on('close', (code) => {
-                if (code !== 0) {
-                    console.error(`Python script exited with code ${code}`);
-                    return reject(new Error('Failed to fetch transcript from YouTube.'));
-                }
-                resolve();
+            // Step 3: Spawn the Python subprocess.
+            // We now pass the explicit `pythonInterpreter` and the extracted `videoId`.
+            const pythonProcess = spawn(pythonInterpreter, [pythonScriptPath, videoId]);
+
+            // Capture standard output (transcript data) from the Python script.
+            pythonProcess.stdout.on('data', (data) => {
+                transcriptData += data.toString();
             });
-        });
 
-        // Step 5: Validate and summarize the transcript
-        const validatedTranscript = validateTranscriptLength(transcript); // Use the updated function below
-        console.log(`Transcripts fetched, length: ${validatedTranscript.length}`);
+            // Capture standard error (error messages) from the Python script.
+            pythonProcess.stderr.on('data', (data) => {
+                pythonError += data.toString();
+            });
 
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-        const prompt = `Summarize the following YouTube video transcript. Focus on key ideas, main arguments, and important conclusions. The summary should be concise and no longer than 500 words:\n\n${validatedTranscript}`;
+            // Step 4: Handle Python script completion or errors.
+            await new Promise((resolve, reject) => {
+                pythonProcess.on('close', (code) => {
+                    if (code !== 0) {
+                        console.error('Python script exited with code', code);
+                        console.error('stderr:', pythonError);
+                        // Enhance error messages based on Python's output for better debugging/frontend display.
+                        if (pythonError.includes('ModuleNotFoundError')) {
+                            // This case should ideally not happen now with `pythonInterpreter` explicit path.
+                            return reject(new Error('Python environment setup error: Missing `youtube_transcript_api` module. Please ensure Python dependencies are installed in your virtual environment.'));
+                        }
+                        if (pythonError.includes('You provided an invalid video id') || pythonError.includes('Could not retrieve a transcript')) {
+                            // Specific error if Python fails due to an invalid ID or unavailable transcript.
+                            return reject(new Error('Failed to fetch transcript: Invalid video URL or transcript not available for this video (e.g., private video, no captions).'));
+                        }
+                        // Generic error for other Python script failures.
+                        return reject(new Error('Failed to fetch transcript from YouTube.'));
+                    }
+                    console.log('✅ Transcript fetched successfully.');
+                    resolve();
+                });
+                // Handle errors if Node.js can't even start the Python process (e.g., interpreter path is wrong).
+                pythonProcess.on('error', (err) => {
+                    console.error('❌ Failed to start python subprocess:', err);
+                    reject(new Error('Failed to start transcript service. Ensure Python and dependencies are installed.'));
+                });
+            });
 
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const geminiResponse = response.text();
+            // If transcriptData is still empty after successful Python execution, it's an unexpected scenario.
+            if (!transcriptData) {
+                console.error('❌ Transcript data is empty after Python script execution.');
+                throw new Error('No transcript found for this video or transcript fetching failed silently.');
+            }
 
-        res.json({
-            success: true,
-            summary: geminiResponse,
-            model: "gemini-2.5-flash",
-            method: "transcript-based-summarization"
-        });
+            // Step 5: Validate and potentially truncate the transcript length.
+            // This is important for staying within the AI model's context window limits.
+            const MAX_TRANSCRIPT_LENGTH = 15000; // Adjust as needed for Gemini 1.5 Flash context window
+            if (transcriptData.length > MAX_TRANSCRIPT_LENGTH) {
+                console.warn(`⚠️ Transcript too long (${transcriptData.length} chars). Truncating to ${MAX_TRANSCRIPT_LENGTH} chars.`);
+                transcriptData = transcriptData.substring(0, MAX_TRANSCRIPT_LENGTH);
+            }
 
-    } catch (error) {
-        console.error('🔥 Global error during summarization process:', error);
-        let errorMessage = 'An unexpected server error occurred during summarization.';
-        let errorCode = 'SERVER_ERROR';
+            // Step 6: Construct the prompt for the Generative AI model.
+            // For now, we'll hardcode 'English' as the video language.
+           // If your application later supports multi-language transcripts, you could pass it dynamically.
+           const prompt = createUniversalPrompt(transcriptData, 'English');
 
-        if (error.message.includes('TRANSCRIPT_TOO_LONG')) {
-            errorMessage = 'Video transcript is too long to summarize.';
-            errorCode = 'TRANSCRIPT_TOO_LONG';
-        } else if (error.message.includes('Failed to fetch transcript')) {
-            errorMessage = 'Could not fetch video transcript. It might be unavailable or private.';
-            errorCode = 'TRANSCRIPT_FETCH_FAILED';
-        } else if (error.message.includes('API key not configured')) {
-             errorMessage = 'API key for summarization is not configured on the backend.';
-             errorCode = 'API_KEY_MISSING';
+            // Step 7: Generate summary using the Gemini AI model.
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Or gemini-1.5-pro for higher quality
+
+            console.log('Sending prompt to Gemini API...');
+            const result = await model.generateContent(prompt);
+            const response = await result.response;
+            const summary = response.text();
+
+            // Step 8: Update user summary count after a successful summary generation.
+            await userManager.incrementSummaryCount(userId);
+
+            console.log(`✅ Summary generated successfully for user ${userId}.`);
+            // Send the successful summary back to the frontend.
+            res.json({ success: true, summary: summary });
+
+        } catch (error) {
+            // Global error handling for the summarization process.
+            console.error('🔥 Global error during summarization process:', error);
+            
+            // Map specific errors to frontend-friendly codes and messages.
+            if (error.message.includes('LIMIT_REACHED')) {
+                return res.status(403).json({ success: false, code: 'LIMIT_REACHED', message: error.message });
+            } else if (error.message.includes('No transcript found') || error.message.includes('Failed to fetch transcript')) {
+                // Catches errors related to transcript fetching issues (including invalid video ID from Python).
+                return res.status(500).json({ success: false, code: 'TRANSCRIPT_FETCH_FAILED', message: error.message });
+            } else if (error.message.includes('API key not configured') || error.message.includes('Failed to start transcript service')) {
+                return res.status(500).json({ success: false, code: 'API_KEY_MISSING_OR_SERVICE_ERROR', message: error.message });
+            } else if (error.message.includes('Python environment setup error')) {
+                // Catches explicit Python environment issues.
+                return res.status(500).json({ success: false, code: 'PYTHON_ENV_ERROR', message: error.message });
+            } else if (error.message.includes('Invalid YouTube video URL')) { // New code for Node.js-side URL validation
+                return res.status(400).json({ success: false, code: 'INVALID_VIDEO_URL', message: error.message });
+            }
+            // Fallback for any other unexpected errors.
+            res.status(500).json({ success: false, code: 'GENERIC_ERROR', message: 'An unexpected error occurred during summarization: ' + error.message });
         }
-
-        res.status(500).json({
-            success: false,
-            error: errorMessage,
-            code: errorCode,
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
-    }
-});
-
-// ... (Existing test endpoint and upgrade-user endpoint)
-
-    // NEW: Upgrade user to pioneer endpoint (for testing/admin)
-   router.post('/upgrade-user', async (req, res) => {
-    // For launch: Keep this endpoint returning a "coming soon" message
-    return res.status(200).json({
-        success: false,
-        message: 'Pioneer Access is a limited-time offer coming soon to early supporters!',
-        code: 'FEATURE_INACTIVE'
     });
 
-    // ... (The actual upgrade logic, commented out or removed for now)
-});
+    // Endpoint for upgrading user to pioneer status (currently returning 'coming soon').
+    router.post('/upgrade-to-pioneer', async (req, res) => {
+        return res.status(200).json({
+            success: false,
+            message: 'Pioneer Access is a limited-time offer coming soon to early supporters!',
+            code: 'FEATURE_INACTIVE'
+        });
+    });
 
-    // Test endpoint for API connectivity (keep as is)
+    // Test endpoint to verify API connectivity and Gemini AI responsiveness.
     router.get('/test', async (req, res) => {
         try {
             if (!process.env.GOOGLE_AI_API_KEY) {
@@ -223,7 +241,7 @@ router.post('/youtube', async (req, res) => {
             const testModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
             const result = await testModel.generateContent("Say 'Backend API with transcript-based summarization is working!' in a friendly way.");
             const response = await result.response;
-            
+
             res.json({
                 success: true,
                 message: 'Backend API is working correctly!',
@@ -240,5 +258,5 @@ router.post('/youtube', async (req, res) => {
         }
     });
 
-    return router;
+    return router; // Return the configured router.
 };
