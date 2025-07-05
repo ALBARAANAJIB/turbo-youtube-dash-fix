@@ -186,13 +186,16 @@ function injectSummarizationPanel() {
   });
 }
 
-// Fixed summarizeVideo function with proper variable handling
+// Secure backend API call with userId
+// In frontend/content.js
 async function summarizeVideo(videoUrl, loadingMessage, contentDiv, loadingDiv, summarizeBtn) {
-    // Clear previous content and show loading
-    contentDiv.innerHTML = '';
-    contentDiv.style.display = 'none';
-    loadingDiv.style.display = 'block';
+    // ... (existing variable declarations)
+
+    // Clear previous summary and show loading
+    summaryOutput.innerHTML = '';
+    loadingMessage.style.display = 'block';
     summarizeBtn.disabled = true;
+    summaryPanel.style.height = 'auto'; // Reset height for new content
 
     try {
         // Retrieve userId from Chrome storage
@@ -200,7 +203,9 @@ async function summarizeVideo(videoUrl, loadingMessage, contentDiv, loadingDiv, 
         const userId = storage.userId;
 
         if (!userId) {
-            showError(contentDiv, loadingDiv, summarizeBtn, 'Authentication required. Please authenticate via the extension popup to use summarization.');
+            // If userId is not found, it means the user is not authenticated.
+            // Prompt them to authenticate or inform them about the requirement.
+            showError('Authentication required. Please authenticate via the extension popup to use summarization.');
             return;
         }
 
@@ -211,7 +216,7 @@ async function summarizeVideo(videoUrl, loadingMessage, contentDiv, loadingDiv, 
             },
             body: JSON.stringify({
                 videoUrl: videoUrl,
-                userId: userId
+                userId: userId // <--- CRUCIAL: Send the userId to the backend
             })
         });
 
@@ -220,30 +225,33 @@ async function summarizeVideo(videoUrl, loadingMessage, contentDiv, loadingDiv, 
         if (!response.ok) {
             // Handle specific error codes from the backend
             if (data.code === 'LIMIT_REACHED') {
-                showRateLimitError(contentDiv, loadingDiv, summarizeBtn, data);
+                showError('You have reached your daily summary limit. Upgrade to Pioneer Access for unlimited summaries!');
+                // Optionally, display a button or link to an "upgrade" page/message here
             } else if (data.code === 'TRANSCRIPT_TOO_LONG') {
-                showError(contentDiv, loadingDiv, summarizeBtn, 'This video transcript is too long to summarize. Please try a shorter video.');
+                 showError('This video transcript is too long to summarize. Please try a shorter video.');
             } else if (data.code === 'TRANSCRIPT_FETCH_FAILED') {
-                showError(contentDiv, loadingDiv, summarizeBtn, 'Could not fetch video transcript. It might be unavailable or private.');
+                showError('Could not fetch video transcript. It might be unavailable or private.');
             } else if (data.code === 'API_KEY_MISSING') {
-                showError(contentDiv, loadingDiv, summarizeBtn, 'Summarization service is temporarily unavailable. Please try again later.');
-            } else {
-                showError(contentDiv, loadingDiv, summarizeBtn, data.error || 'Failed to summarize video. Please try again.');
+                 showError('Summarization service is temporarily unavailable. Please try again later.');
             }
-            return;
+            else {
+                showError(data.error || 'Failed to summarize video. Please try again.');
+            }
+            return; // Stop execution on error
         }
 
-        // Handle successful response
-        showSuccess(contentDiv, loadingDiv, summarizeBtn, data.summary, data.metadata, data.rateLimitInfo);
+        // ... (rest of your success handling for summarization)
 
     } catch (error) {
         console.error('❌ Error during summarization fetch:', error);
-        showError(contentDiv, loadingDiv, summarizeBtn, 'An error occurred during summarization. Please check your internet connection or try again later.');
+        showError('An error occurred during summarization. Please check your internet connection or try again later.');
     } finally {
-        loadingDiv.style.display = 'none';
+        loadingMessage.style.display = 'none';
         summarizeBtn.disabled = false;
     }
 }
+
+// ... (rest of your content.js file)
 
 // NEW: Show rate limit error with upgrade message
 function showRateLimitError(contentDiv, loadingDiv, summarizeBtn, errorData) {
@@ -478,7 +486,6 @@ function showError(contentDiv, loadingDiv, summarizeBtn, errorMessage) {
   summarizeBtn.style.display = 'block';
 }
 
-// ... keep existing code (liked videos functions and initialization code)
 function injectLikedVideosButtons() {
   if (!window.location.href.includes('youtube.com/playlist?list=LL')) {
     return;
