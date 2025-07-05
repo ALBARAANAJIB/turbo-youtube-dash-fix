@@ -3,44 +3,37 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const path = require('path');
-const { Pool } = require('pg');
+const { Pool } = require('pg'); // Import the Pool class from the pg library
+
 
 // 🌟🌟🌟 START: IMPORTANT - LOAD ENVIRONMENT VARIABLES FIRST 🌟🌟🌟
 require('dotenv').config();
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 // 🌟🌟🌟 END: IMPORTANT - LOAD ENVIRONMENT VARIABLES FIRST 🌟🌟🌟
 
-// NEW: Import database initializer
-const DatabaseInitializer = require('./database/init');
 
 // Database connection configuration
 const pool = new Pool({
-   connectionString: process.env.DATABASE_URL,
-    ssl: false
+   connectionString: process.env.DATABASE_URL, // 🌟🌟🌟 CHANGE THIS LINE BACK 🌟🌟🌟
+    ssl: false // Explicitly set to false for local development without SSL
 });
 
-// NEW: Initialize database initializer
-const dbInitializer = new DatabaseInitializer(pool);
-
-// Test the database connection and initialize schema when the server starts
+// Test the database connection when the server starts
 pool.connect()
-    .then(async (client) => {
+    .then(client => {
         console.log('✅ Connected to local PostgreSQL database!');
-        client.release();
-        
-        // NEW: Initialize database schema
-        try {
-            await dbInitializer.initializeDatabase();
-            await dbInitializer.healthCheck();
-        } catch (initError) {
-            console.error('❌ Database initialization failed:', initError.message);
-            console.error('💡 Make sure your PostgreSQL server is running and the database exists.');
-        }
+        client.release(); // Release the client back to the pool
     })
     .catch(err => {
         console.error('❌ Error connecting to PostgreSQL database:', err.message);
         console.error('💡 Please ensure your local PostgreSQL server is running and DATABASE_URL in .env is correct.');
+        // In a production app, you might want to exit the process if the database is critical.
+        // For development, we'll just log and continue, but features won't work.
+        // process.exit(1);
     });
+
+
+
 
 // Debug environment loading
 console.log('🔧 Environment loading debug:');
