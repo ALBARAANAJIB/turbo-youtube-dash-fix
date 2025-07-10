@@ -1,4 +1,4 @@
-// YouTube Enhancer Background Script with Correct Liked Videos API
+// Enhanced YouTube Enhancer Background Script with Token Refresh and Persistence
 console.log('🚀 YouTube Enhancer background script loaded');
 
 // OAuth 2.0 constants
@@ -25,64 +25,257 @@ chrome.runtime.onInstalled.addListener((details) => {
   }
 });
 
-// FIXED: Modern Chrome Authentication with better token handling
-// In frontend/background.js
-async function authenticateWithYouTube() {
-    try {
-        console.log('🔐 Starting YouTube authentication with Chrome Identity API...');
-
-        // Clear any existing tokens first
-        await chrome.storage.local.remove(['userToken', 'userInfo', 'userId']); // Add 'userId' here
-
-        const token = await new Promise((resolve, reject) => {
-            chrome.identity.getAuthToken({ interactive: true, scopes: SCOPES }, (token) => {
-                if (chrome.runtime.lastError || !token) {
-                    return reject(new Error(chrome.runtime.lastError?.message || 'Failed to get auth token.'));
-                }
-                resolve(token);
-            });
-        });
-
-        // Fetch user info using the token (from userinfo.profile and userinfo.email scopes)
-        const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-        if (!userInfoResponse.ok) {
-            throw new Error('Failed to fetch user info.');
-        }
-        const userInfo = await userInfoResponse.json();
-
-        // Store user ID for backend use - use userInfo.id as the stable identifier
-        await chrome.storage.local.set({ userToken: token, userInfo: userInfo, userId: userInfo.id }); // <--- CRUCIAL: Store userInfo.id
-        console.log('User authenticated and info stored:', userInfo);
-        return { success: true, user: userInfo };
-
-    } catch (error) {
-        console.error('❌ Authentication error:', error);
-        return { success: false, error: error.message };
+// NEW: Token validation and refresh utility
+async function validateAndRefreshToken() {
+  try {
+    console.log('🔍 Validating stored token...');
+    
+    const storage = await chrome.storage.local.get(['userToken', 'tokenExpiry', 'userInfo']);
+    
+    if (!storage.userToken) {
+      console.log('❌ No token found');
+      return { valid: false, needsAuth: true };
     }
+    
+    // Check if token is expired (with 5-minute buffer)
+    const now = Date.now();
+    const expiryTime = storage.tokenExpiry || 0;
+    const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
+    
+    if (expiryTime && now > (expiryTime - bufferTime)) {
+      console.log('⏰ Token is expired or about to expire, refreshing...');
+      return await refreshToken();
+    }
+    
+    // Test token validity with a simple API call
+    try {
+      const testResponse = await fetch('https://www.googleapis.com/oauth2/v1/tokeninfo', {
+        headers: { 'Authorization': `Bearer ${storage.userToken}` }
+      });
+      
+      if (testResponse.ok) {
+        const tokenInfo = await testResponse.json();
+        console.log('✅ Token is valid, expires in:', tokenInfo.expires_in, 'seconds');
+        
+        // Update expiry time based on API response
+        if (tokenInfo.expires_in) {
+          const newExpiry = now + (tokenInfo.expires_in * 1000);
+          await chrome.storage.local.set({ tokenExpiry: newExpiry });
+        }
+        
+        return { valid: true, token: storage.userToken };
+      } else {
+        console.log('❌ Token validation failed, needs refresh');
+        return await refreshToken();
+      }
+    } catch (error) {
+      console.log('❌ Token validation error:', error.message);
+      return await refreshToken();
+    }
+    
+  } catch (error) {
+    console.error('❌ Token validation error:', error);
+    return { valid: false, needsAuth: true };
+  }
 }
 
-// FIXED: Get the user's liked videos using multiple approaches with better error handling
-async function getLikedPlaylistId(userToken) {
+// NEW: Token refresh function
+async function refreshToken() {
   try {
-    console.log('🔍 Attempting to get liked videos playlist ID...');
+    console.log('🔄 Attempting to refresh token...');
     
-    // Method 1: Try to get the user's channel info
-    let channelResponse = await fetch(`${CHANNELS_ENDPOINT}?part=contentDetails,snippet&mine=true`, {
-      headers: { 
-        Authorization: `Bearer ${userToken}`,
+    // Clear the cached token first
+    await chrome.storage.local.remove(['userToken', 'tokenExpiry']);
+    
+    // Use Chrome Identity API to get a fresh token
+    const token = await new Promise((resolve, reject) => {
+      chrome.identity.getAuthToken({ 
+        interactive: false, // Don't show UI for refresh
+        scopes: SCOPES 
+      }, (token) => {
+        if (chrome.runtime.lastError || !token) {
+          console.log('🔄 Silent refresh failed, will need interactive auth');
+          resolve(null);
+        } else {
+          resolve(token);
+        }
+      });
+    });
+    
+    if (token) {
+      console.log('✅ Token refreshed successfully');
+      
+      // Get token expiry information
+      const tokenInfoResponse = await fetch('https://www.googleapis.com/oauth2/v1/tokeninfo', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      let expiry = Date.now() + (3600 * 1000); // Default 1 hour
+      if (tokenInfoResponse.ok) {
+        const tokenInfo = await tokenInfoResponse.json();
+        if (tokenInfo.expires_in) {
+          expiry = Date.now() + (tokenInfo.expires_in * 1000);
+        }
+      }
+      
+      await chrome.storage.local.set({ 
+        userToken: token, 
+        tokenExpiry: expiry 
+      });
+      
+      return { valid: true, token: token };
+    } else {
+      console.log('❌ Token refresh failed, needs interactive auth');
+      return { valid: false, needsAuth: true };
+    }
+    
+  } catch (error) {
+    console.error('❌ Token refresh error:', error);
+    return { valid: false, needsAuth: true };
+  }
+}
+
+// ENHANCED: Authentication with better token handling and expiry tracking
+async function authenticateWithYouTube() {
+  try {
+    console.log('🔐 Starting YouTube authentication with Chrome Identity API...');
+
+    // First check if we have a valid token
+    const tokenCheck = await validateAndRefreshToken();
+    if (tokenCheck.valid) {
+      console.log('✅ Using existing valid token');
+      const storage = await chrome.storage.local.get(['userInfo']);
+      return { success: true, user: storage.userInfo };
+    }
+
+    // Clear any existing tokens first
+    await chrome.storage.local.remove(['userToken', 'userInfo', 'userId', 'tokenExpiry']);
+
+    const token = await new Promise((resolve, reject) => {
+      chrome.identity.getAuthToken({ 
+        interactive: true, 
+        scopes: SCOPES 
+      }, (token) => {
+        if (chrome.runtime.lastError || !token) {
+          return reject(new Error(chrome.runtime.lastError?.message || 'Failed to get auth token.'));
+        }
+        resolve(token);
+      });
+    });
+
+    // Get token expiry information
+    const tokenInfoResponse = await fetch('https://www.googleapis.com/oauth2/v1/tokeninfo', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    let expiry = Date.now() + (3600 * 1000); // Default 1 hour
+    if (tokenInfoResponse.ok) {
+      const tokenInfo = await tokenInfoResponse.json();
+      if (tokenInfo.expires_in) {
+        expiry = Date.now() + (tokenInfo.expires_in * 1000);
+      }
+    }
+
+    // Fetch user info using the token
+    const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (!userInfoResponse.ok) {
+      throw new Error('Failed to fetch user info.');
+    }
+    
+    const userInfo = await userInfoResponse.json();
+
+    // Store user data with expiry
+    await chrome.storage.local.set({ 
+      userToken: token, 
+      userInfo: userInfo, 
+      userId: userInfo.id,
+      tokenExpiry: expiry,
+      lastAuthTime: Date.now()
+    });
+    
+    console.log('✅ User authenticated and info stored:', userInfo);
+    console.log('⏰ Token expires at:', new Date(expiry).toLocaleString());
+    
+    return { success: true, user: userInfo };
+
+  } catch (error) {
+    console.error('❌ Authentication error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// ENHANCED: All API calls now use token validation
+async function makeAuthenticatedRequest(url, options = {}) {
+  try {
+    // Validate token before making request
+    const tokenCheck = await validateAndRefreshToken();
+    
+    if (!tokenCheck.valid) {
+      if (tokenCheck.needsAuth) {
+        throw new Error('NEEDS_REAUTH');
+      } else {
+        throw new Error('Token validation failed');
+      }
+    }
+    
+    // Make the request with the validated token
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        'Authorization': `Bearer ${tokenCheck.token}`,
         'Accept': 'application/json'
       }
     });
+    
+    // Handle token expiry during request
+    if (response.status === 401) {
+      console.log('🔄 Request returned 401, token may be expired');
+      
+      // Try to refresh token one more time
+      const refreshResult = await refreshToken();
+      if (refreshResult.valid) {
+        // Retry the request with new token
+        return await fetch(url, {
+          ...options,
+          headers: {
+            ...options.headers,
+            'Authorization': `Bearer ${refreshResult.token}`,
+            'Accept': 'application/json'
+          }
+        });
+      } else {
+        throw new Error('NEEDS_REAUTH');
+      }
+    }
+    
+    return response;
+    
+  } catch (error) {
+    if (error.message === 'NEEDS_REAUTH') {
+      throw error;
+    }
+    console.error('❌ Authenticated request error:', error);
+    throw error;
+  }
+}
+
+// UPDATED: Use the new authenticated request function
+async function getLikedPlaylistId() {
+  try {
+    console.log('🔍 Attempting to get liked videos playlist ID...');
+    
+    const channelResponse = await makeAuthenticatedRequest(
+      `${CHANNELS_ENDPOINT}?part=contentDetails,snippet&mine=true`
+    );
     
     if (!channelResponse.ok) {
       const errorText = await channelResponse.text();
       console.error('❌ Channel API error:', channelResponse.status, errorText);
       
-      // If we get a 403, it might be permissions issue
       if (channelResponse.status === 403) {
         console.log('🔄 Channel access denied, trying alternative approach...');
         throw new Error('CHANNEL_ACCESS_DENIED');
@@ -100,19 +293,7 @@ async function getLikedPlaylistId(userToken) {
     }
     
     const channel = channelData.items[0];
-    console.log('📺 Channel details:', {
-      id: channel.id,
-      title: channel.snippet?.title,
-      contentDetails: channel.contentDetails
-    });
-    
-    // Check for contentDetails and relatedPlaylists
-    if (!channel.contentDetails || !channel.contentDetails.relatedPlaylists) {
-      console.log('⚠️ No relatedPlaylists found, trying alternative approach...');
-      throw new Error('NO_RELATED_PLAYLISTS');
-    }
-    
-    const likedPlaylistId = channel.contentDetails.relatedPlaylists.likes;
+    const likedPlaylistId = channel.contentDetails?.relatedPlaylists?.likes;
     
     if (!likedPlaylistId) {
       console.log('⚠️ No liked playlist ID found, trying alternative approach...');
@@ -121,13 +302,10 @@ async function getLikedPlaylistId(userToken) {
     
     console.log('✅ Found liked playlist ID:', likedPlaylistId);
     
-    // Test if we can access the playlist
-    const testResponse = await fetch(`${PLAYLIST_ITEMS_ENDPOINT}?part=snippet&playlistId=${likedPlaylistId}&maxResults=1`, {
-      headers: { 
-        Authorization: `Bearer ${userToken}`,
-        'Accept': 'application/json'
-      }
-    });
+    // Test playlist access
+    const testResponse = await makeAuthenticatedRequest(
+      `${PLAYLIST_ITEMS_ENDPOINT}?part=snippet&playlistId=${likedPlaylistId}&maxResults=1`
+    );
     
     if (!testResponse.ok) {
       console.log('⚠️ Playlist access test failed, trying alternative approach...');
@@ -139,38 +317,23 @@ async function getLikedPlaylistId(userToken) {
     
   } catch (error) {
     console.log('❌ Primary method failed:', error.message);
-    // Don't throw here - let the caller handle the fallback
     throw error;
   }
 }
 
-// ENHANCED: Fetch liked videos with improved error handling and pagination support
+// UPDATED: Enhanced fetch with automatic token refresh
 async function fetchLikedVideos(pageToken = null) {
   try {
     console.log('📺 Starting liked videos fetch process...', pageToken ? `with pageToken: ${pageToken}` : 'initial fetch');
-    
-    const storage = await chrome.storage.local.get(['userToken', 'userInfo', 'tokenExpiry']);
-    
-    if (!storage.userToken) {
-      throw new Error('Not authenticated. Please sign in first.');
-    }
-    
-    if (storage.tokenExpiry && Date.now() > storage.tokenExpiry) {
-      console.log('🔄 Token expired, need to re-authenticate');
-      throw new Error('Token expired. Please sign in again.');
-    }
-    
-    console.log('👤 Authenticated user:', storage.userInfo?.email || storage.userInfo?.name || 'Unknown');
     
     let videos = [];
     let nextPageToken = null;
     let totalResults = 0;
     
     try {
-      // Try the playlist approach first
       console.log('🎯 Attempting playlist approach...');
-      const likedPlaylistId = await getLikedPlaylistId(storage.userToken);
-      const result = await fetchVideosFromPlaylist(storage.userToken, likedPlaylistId, pageToken);
+      const likedPlaylistId = await getLikedPlaylistId();
+      const result = await fetchVideosFromPlaylist(likedPlaylistId, pageToken);
       videos = result.videos;
       nextPageToken = result.nextPageToken;
       totalResults = result.totalResults;
@@ -178,15 +341,32 @@ async function fetchLikedVideos(pageToken = null) {
     } catch (playlistError) {
       console.log('⚠️ Playlist approach failed:', playlistError.message);
       
-      // Only try alternative if it's a specific error we can handle
+      // Handle re-authentication needs
+      if (playlistError.message === 'NEEDS_REAUTH') {
+        return {
+          success: false,
+          error: 'Authentication expired. Please sign in again.',
+          needsReauth: true
+        };
+      }
+      
+      // Try alternative approach
       if (['CHANNEL_ACCESS_DENIED', 'NO_CHANNEL_FOUND', 'NO_RELATED_PLAYLISTS', 'NO_LIKED_PLAYLIST', 'PLAYLIST_ACCESS_DENIED'].includes(playlistError.message)) {
         try {
           console.log('🔄 Trying myRating approach...');
-          const result = await fetchLikedVideosViaRating(storage.userToken, pageToken);
+          const result = await fetchLikedVideosViaRating(pageToken);
           videos = result.videos;
           nextPageToken = result.nextPageToken;
           totalResults = result.totalResults;
         } catch (ratingError) {
+          if (ratingError.message === 'NEEDS_REAUTH') {
+            return {
+              success: false,
+              error: 'Authentication expired. Please sign in again.',
+              needsReauth: true
+            };
+          }
+          
           console.error('❌ Rating approach also failed:', ratingError.message);
           return {
             success: false,
@@ -211,13 +391,13 @@ async function fetchLikedVideos(pageToken = null) {
       };
     }
     
-    // If this is the first fetch (no pageToken), store the videos
-    // If it's a pagination fetch, the caller will handle merging
+    // Store videos if first fetch
     if (!pageToken) {
       await chrome.storage.local.set({ 
         likedVideos: videos,
         nextPageToken: nextPageToken,
-        totalResults: totalResults
+        totalResults: totalResults,
+        lastFetchTime: Date.now()
       });
     }
     
@@ -231,6 +411,15 @@ async function fetchLikedVideos(pageToken = null) {
     
   } catch (error) {
     console.error('❌ Error in fetchLikedVideos:', error);
+    
+    if (error.message === 'NEEDS_REAUTH') {
+      return {
+        success: false,
+        error: 'Authentication expired. Please sign in again.',
+        needsReauth: true
+      };
+    }
+    
     return {
       success: false,
       error: error.message
@@ -238,8 +427,8 @@ async function fetchLikedVideos(pageToken = null) {
   }
 }
 
-// ENHANCED: Helper function to fetch videos from playlist with pagination
-async function fetchVideosFromPlaylist(userToken, playlistId, pageToken = null) {
+// UPDATED: Helper functions with new authentication
+async function fetchVideosFromPlaylist(playlistId, pageToken = null) {
   console.log('📋 Fetching from playlist:', playlistId, pageToken ? `page: ${pageToken}` : 'first page');
   
   let url = `${PLAYLIST_ITEMS_ENDPOINT}?part=snippet,contentDetails&playlistId=${playlistId}&maxResults=50`;
@@ -247,12 +436,7 @@ async function fetchVideosFromPlaylist(userToken, playlistId, pageToken = null) 
     url += `&pageToken=${pageToken}`;
   }
   
-  const playlistResponse = await fetch(url, {
-    headers: { 
-      Authorization: `Bearer ${userToken}`,
-      'Accept': 'application/json'
-    }
-  });
+  const playlistResponse = await makeAuthenticatedRequest(url);
   
   if (!playlistResponse.ok) {
     const errorText = await playlistResponse.text();
@@ -272,19 +456,12 @@ async function fetchVideosFromPlaylist(userToken, playlistId, pageToken = null) 
     };
   }
   
-  // Extract video IDs to get detailed video information
+  // Extract video IDs and get detailed information
   const videoIds = playlistData.items.map(item => item.contentDetails.videoId).join(',');
   console.log('🆔 Video IDs to fetch:', videoIds);
   
-  // Get detailed video information
-  const videosResponse = await fetch(
-    `${VIDEOS_ENDPOINT}?part=snippet,statistics,contentDetails&id=${videoIds}`, 
-    {
-      headers: { 
-        Authorization: `Bearer ${userToken}`,
-        'Accept': 'application/json'
-      }
-    }
+  const videosResponse = await makeAuthenticatedRequest(
+    `${VIDEOS_ENDPOINT}?part=snippet,statistics,contentDetails&id=${videoIds}`
   );
   
   if (!videosResponse.ok) {
@@ -296,7 +473,7 @@ async function fetchVideosFromPlaylist(userToken, playlistId, pageToken = null) 
   const videosData = await videosResponse.json();
   console.log('📹 Videos data:', videosData);
   
-  // Combine playlist order with video details
+  // Process videos
   const videos = playlistData.items.map(playlistItem => {
     const videoDetails = videosData.items.find(video => video.id === playlistItem.contentDetails.videoId);
     
@@ -311,7 +488,7 @@ async function fetchVideosFromPlaylist(userToken, playlistId, pageToken = null) 
       channelTitle: videoDetails.snippet.channelTitle,
       channelId: videoDetails.snippet.channelId,
       publishedAt: videoDetails.snippet.publishedAt,
-      likedAt: playlistItem.snippet.publishedAt, // This is when it was added to the liked playlist
+      likedAt: playlistItem.snippet.publishedAt,
       thumbnail: videoDetails.snippet.thumbnails.medium?.url || videoDetails.snippet.thumbnails.default?.url || '',
       viewCount: videoDetails.statistics?.viewCount || '0',
       likeCount: videoDetails.statistics?.likeCount || '0',
@@ -329,8 +506,7 @@ async function fetchVideosFromPlaylist(userToken, playlistId, pageToken = null) 
   };
 }
 
-// ENHANCED: Alternative method using myRating=like parameter with pagination
-async function fetchLikedVideosViaRating(userToken, pageToken = null) {
+async function fetchLikedVideosViaRating(pageToken = null) {
   console.log('⭐ Attempting to find liked videos via myRating parameter...', pageToken ? `page: ${pageToken}` : 'first page');
   
   let url = `${VIDEOS_ENDPOINT}?part=snippet,statistics,contentDetails&myRating=like&maxResults=50`;
@@ -338,12 +514,7 @@ async function fetchLikedVideosViaRating(userToken, pageToken = null) {
     url += `&pageToken=${pageToken}`;
   }
   
-  const response = await fetch(url, {
-    headers: { 
-      Authorization: `Bearer ${userToken}`,
-      'Accept': 'application/json'
-    }
-  });
+  const response = await makeAuthenticatedRequest(url);
   
   if (!response.ok) {
     const errorText = await response.text();
@@ -362,14 +533,13 @@ async function fetchLikedVideosViaRating(userToken, pageToken = null) {
     };
   }
   
-  // Format the videos (note: we won't have accurate "liked" dates with this method)
   const videos = data.items.map(video => ({
     id: video.id,
     title: video.snippet.title,
     channelTitle: video.snippet.channelTitle,
     channelId: video.snippet.channelId,
     publishedAt: video.snippet.publishedAt,
-    likedAt: video.snippet.publishedAt, // Fallback: use published date
+    likedAt: video.snippet.publishedAt,
     thumbnail: video.snippet.thumbnails.medium?.url || video.snippet.thumbnails.default?.url || '',
     viewCount: video.statistics?.viewCount || '0',
     likeCount: video.statistics?.likeCount || '0',
@@ -386,7 +556,7 @@ async function fetchLikedVideosViaRating(userToken, pageToken = null) {
   };
 }
 
-// ENHANCED: Fetch more videos with proper pagination
+// UPDATED: All other functions with authentication handling
 async function fetchMoreLikedVideos(pageToken) {
   console.log('📺 Fetching more liked videos with pageToken:', pageToken);
   
@@ -401,14 +571,10 @@ async function fetchMoreLikedVideos(pageToken) {
     const result = await fetchLikedVideos(pageToken);
     
     if (result.success) {
-      // Get current videos from storage
       const storage = await chrome.storage.local.get(['likedVideos', 'totalResults']);
       const currentVideos = storage.likedVideos || [];
-      
-      // Merge new videos with existing ones
       const allVideos = [...currentVideos, ...result.videos];
       
-      // Update storage
       await chrome.storage.local.set({
         likedVideos: allVideos,
         nextPageToken: result.nextPageToken,
@@ -417,8 +583,8 @@ async function fetchMoreLikedVideos(pageToken) {
       
       return {
         success: true,
-        videos: result.videos, // Return only new videos
-        allVideos: allVideos, // Return all videos for context
+        videos: result.videos,
+        allVideos: allVideos,
         count: result.videos.length,
         totalCount: allVideos.length,
         nextPageToken: result.nextPageToken,
@@ -437,26 +603,13 @@ async function fetchMoreLikedVideos(pageToken) {
   }
 }
 
-// Delete video from YouTube liked list using the API
 async function deleteVideoFromYouTube(videoId) {
   try {
     console.log('🗑️ Deleting video from YouTube:', videoId);
     
-    const storage = await chrome.storage.local.get(['userToken', 'tokenExpiry']);
-    
-    if (!storage.userToken) {
-      throw new Error('Not authenticated. Please sign in first.');
-    }
-    
-    if (storage.tokenExpiry && Date.now() > storage.tokenExpiry) {
-      throw new Error('Token expired. Please sign in again.');
-    }
-    
-    // Use YouTube API to remove the like rating (set to 'none')
-    const response = await fetch(`${API_BASE}/videos/rate`, {
+    const response = await makeAuthenticatedRequest(`${API_BASE}/videos/rate`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${storage.userToken}`,
         'Content-Type': 'application/x-www-form-urlencoded'
       },
       body: `id=${videoId}&rating=none`
@@ -477,6 +630,15 @@ async function deleteVideoFromYouTube(videoId) {
     
   } catch (error) {
     console.error('❌ Error deleting video from YouTube:', error);
+    
+    if (error.message === 'NEEDS_REAUTH') {
+      return {
+        success: false,
+        error: 'Authentication expired. Please sign in again.',
+        needsReauth: true
+      };
+    }
+    
     return {
       success: false,
       error: error.message
@@ -484,20 +646,9 @@ async function deleteVideoFromYouTube(videoId) {
   }
 }
 
-// COMPLETELY REWRITTEN: Export function that fetches ALL liked videos
 async function exportLikedVideos() {
   try {
     console.log('📤 Starting FULL export of ALL liked videos...');
-    
-    const storage = await chrome.storage.local.get(['userToken', 'userInfo', 'tokenExpiry']);
-    
-    if (!storage.userToken) {
-      throw new Error('Not authenticated. Please sign in first.');
-    }
-    
-    if (storage.tokenExpiry && Date.now() > storage.tokenExpiry) {
-      throw new Error('Token expired. Please sign in again.');
-    }
     
     let allVideos = [];
     let pageToken = null;
@@ -506,13 +657,15 @@ async function exportLikedVideos() {
     
     console.log('🔄 Fetching ALL liked videos for export...');
     
-    // Fetch all pages of liked videos
     do {
       console.log(`📥 Fetching page ${pageToken ? `(${pageToken})` : '1'}...`);
       
       const result = await fetchLikedVideos(pageToken);
       
       if (!result.success) {
+        if (result.needsReauth) {
+          throw new Error('Authentication expired. Please sign in again.');
+        }
         throw new Error(result.error);
       }
       
@@ -523,7 +676,6 @@ async function exportLikedVideos() {
       
       console.log(`📊 Progress: ${totalFetched}/${totalAvailable} videos fetched`);
       
-      // Prevent infinite loops
       if (totalFetched >= 1000) {
         console.log('⚠️ Reached safety limit of 1000 videos');
         break;
@@ -540,7 +692,8 @@ async function exportLikedVideos() {
       };
     }
     
-    // Prepare comprehensive export data
+    const storage = await chrome.storage.local.get(['userInfo']);
+    
     const exportData = {
       exportDate: new Date().toISOString(),
       exportType: 'FULL_LIKED_VIDEOS_EXPORT',
@@ -561,13 +714,9 @@ async function exportLikedVideos() {
       }))
     };
     
-    // Convert to JSON string
     const jsonString = JSON.stringify(exportData, null, 2);
-    
-    // Create data URL for the JSON file
     const dataUrl = 'data:application/json;charset=utf-8,' + encodeURIComponent(jsonString);
     
-    // Use chrome.downloads to save the file
     await chrome.downloads.download({
       url: dataUrl,
       filename: `youtube-liked-videos-FULL-${new Date().toISOString().split('T')[0]}.json`,
@@ -586,6 +735,15 @@ async function exportLikedVideos() {
     
   } catch (error) {
     console.error('❌ Full export error:', error);
+    
+    if (error.message === 'NEEDS_REAUTH' || error.message.includes('Authentication expired')) {
+      return {
+        success: false,
+        error: 'Authentication expired. Please sign in again.',
+        needsReauth: true
+      };
+    }
+    
     return {
       success: false,
       error: error.message
@@ -593,14 +751,54 @@ async function exportLikedVideos() {
   }
 }
 
-// Message handling
+// NEW: Check authentication status on startup
+async function checkAuthOnStartup() {
+  try {
+    console.log('🔍 Checking authentication status on startup...');
+    
+    const storage = await chrome.storage.local.get(['userToken', 'userInfo', 'lastAuthTime']);
+    
+    if (!storage.userToken || !storage.userInfo) {
+      console.log('❌ No stored authentication found');
+      return;
+    }
+    
+    const tokenCheck = await validateAndRefreshToken();
+    
+    if (tokenCheck.valid) {
+      console.log('✅ Authentication is valid on startup');
+    } else {
+      console.log('❌ Authentication is invalid, user will need to re-authenticate');
+      // Clear invalid data
+      await chrome.storage.local.remove(['userToken', 'userInfo', 'userId', 'tokenExpiry']);
+    }
+    
+  } catch (error) {
+    console.error('❌ Error checking auth on startup:', error);
+  }
+}
+
+// NEW: Periodic token validation
+setInterval(async () => {
+  try {
+    const storage = await chrome.storage.local.get(['userToken']);
+    if (storage.userToken) {
+      console.log('🔄 Periodic token validation...');
+      await validateAndRefreshToken();
+    }
+  } catch (error) {
+    console.error('❌ Periodic token validation error:', error);
+  }
+}, 15 * 60 * 1000); // Check every 15 minutes
+
+// Message handling with enhanced error handling
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('📨 Background received message:', message);
   
   switch (message.action) {
     case 'authenticate':
       authenticateWithYouTube().then(sendResponse);
-      return true; // Keep message channel open for async response
+      return true;
       
     case 'fetchLikedVideos':
       fetchLikedVideos().then(sendResponse);
@@ -618,15 +816,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       exportLikedVideos().then(sendResponse);
       return true;
       
+    case 'checkAuth':
+      validateAndRefreshToken().then(result => {
+        sendResponse({ 
+          authenticated: result.valid,
+          needsReauth: result.needsAuth 
+        });
+      });
+      return true;
+      
     default:
       console.log('❓ Unknown action:', message.action);
       sendResponse({ success: false, error: 'Unknown action' });
   }
 });
 
-// Keep service worker alive
+// Enhanced startup handling
 chrome.runtime.onStartup.addListener(() => {
   console.log('🔄 Extension startup');
+  checkAuthOnStartup();
 });
 
-console.log('✅ Background script fully initialized');
+// Check auth when service worker becomes active
+checkAuthOnStartup();
+
+console.log('✅ Enhanced background script fully initialized with token refresh capabilities');
