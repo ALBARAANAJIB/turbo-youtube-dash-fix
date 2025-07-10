@@ -817,11 +817,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
       
     case 'checkAuth':
-      validateAndRefreshToken().then(result => {
-        sendResponse({ 
-          authenticated: result.valid,
-          needsReauth: result.needsAuth 
-        });
+      validateAndRefreshToken().then(async (result) => {
+        if (result.valid) {
+          // Get user info from storage
+          const storage = await chrome.storage.local.get(['userInfo', 'userId']);
+          sendResponse({ 
+            success: true,
+            userInfo: storage.userInfo,
+            userId: storage.userId,
+            needsReauth: false
+          });
+        } else {
+          sendResponse({ 
+            success: false,
+            needsReauth: result.needsAuth || true
+          });
+        }
       });
       return true;
       

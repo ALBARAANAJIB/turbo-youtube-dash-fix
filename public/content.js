@@ -195,14 +195,19 @@ async function summarizeVideo(videoUrl, loadingMessage, contentDiv, loadingDiv, 
     summarizeBtn.disabled = true;
 
     try {
-        // Retrieve userId from Chrome storage
-        const storage = await chrome.storage.local.get('userId');
-        const userId = storage.userId;
-
-        if (!userId) {
-            showError(contentDiv, loadingDiv, summarizeBtn, 'Authentication required. Please authenticate via the extension popup to use summarization.');
+        // Validate authentication before making request
+        const authResponse = await chrome.runtime.sendMessage({ action: 'checkAuth' });
+        
+        if (!authResponse || !authResponse.success) {
+            if (authResponse && authResponse.needsReauth) {
+                showError(contentDiv, loadingDiv, summarizeBtn, 'Your session has expired. Please open the extension popup and sign in again to use summarization.');
+            } else {
+                showError(contentDiv, loadingDiv, summarizeBtn, 'Authentication required. Please authenticate via the extension popup to use summarization.');
+            }
             return;
         }
+
+        const userId = authResponse.userId;
 
         const response = await fetch(`${API_BASE_URL}/summary/youtube`, {
             method: 'POST',

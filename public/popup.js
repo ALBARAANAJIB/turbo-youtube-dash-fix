@@ -11,22 +11,27 @@ document.addEventListener('DOMContentLoaded', () => {
   const userEmail = document.getElementById('user-email');
   const userInitial = document.getElementById('user-initial');
 
-  // Check if user is already authenticated
-  chrome.storage.local.get(['userToken', 'userInfo'], (result) => {
-    if (result.userToken && result.userInfo) {
+  // Check authentication status using background script validation
+  chrome.runtime.sendMessage({ action: 'checkAuth' }, (response) => {
+    if (response && response.success && response.userInfo) {
       loginContainer.style.display = 'none';
       featuresContainer.style.display = 'block';
       
-      if (result.userInfo.email) {
-        userEmail.textContent = result.userInfo.email;
-        userInitial.textContent = result.userInfo.email.charAt(0).toUpperCase();
-      } else if (result.userInfo.name) {
-        userEmail.textContent = result.userInfo.name;
-        userInitial.textContent = result.userInfo.name.charAt(0).toUpperCase();
+      if (response.userInfo.email) {
+        userEmail.textContent = response.userInfo.email;
+        userInitial.textContent = response.userInfo.email.charAt(0).toUpperCase();
+      } else if (response.userInfo.name) {
+        userEmail.textContent = response.userInfo.name;
+        userInitial.textContent = response.userInfo.name.charAt(0).toUpperCase();
       }
     } else {
       loginContainer.style.display = 'block';
       featuresContainer.style.display = 'none';
+      
+      // Show re-authentication message if needed
+      if (response && response.needsReauth) {
+        showErrorMessage('Your session has expired. Please sign in again.');
+      }
     }
   });
 
@@ -67,8 +72,13 @@ document.addEventListener('DOMContentLoaded', () => {
       
       if (response && response.success) {
         showSuccessMessage(fetchVideosButton, `${response.count} videos fetched!`);
+      } else if (response && response.needsReauth) {
+        showErrorMessage('Your session has expired. Please sign in again.');
+        // Switch back to login view
+        loginContainer.style.display = 'block';
+        featuresContainer.style.display = 'none';
       } else {
-        showErrorMessage('Failed to fetch videos. Please try again.');
+        showErrorMessage(response?.error || 'Failed to fetch videos. Please try again.');
       }
     });
   });
@@ -91,8 +101,13 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (response && response.success) {
           showSuccessMessage(exportDataButton, `${response.count} videos exported!`);
+        } else if (response && response.needsReauth) {
+          showErrorMessage('Your session has expired. Please sign in again.');
+          // Switch back to login view
+          loginContainer.style.display = 'block';
+          featuresContainer.style.display = 'none';
         } else {
-          showErrorMessage('Export failed. Please try again.');
+          showErrorMessage(response?.error || 'Export failed. Please try again.');
           console.error('Export failed:', response?.error || 'Unknown error');
         }
       }, 1000);
@@ -117,7 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Sign out
   signOutButton && signOutButton.addEventListener('click', () => {
-    chrome.storage.local.remove(['userToken', 'userInfo', 'likedVideos'], () => {
+    chrome.storage.local.remove(['userToken', 'userInfo', 'userId', 'tokenExpiry', 'likedVideos'], () => {
       loginContainer.style.display = 'block';
       featuresContainer.style.display = 'none';
     });
