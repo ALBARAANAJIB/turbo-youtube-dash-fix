@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const signOutButton = document.getElementById('sign-out');
   const userEmail = document.getElementById('user-email');
   const userInitial = document.getElementById('user-initial');
+  const userAvatar = document.getElementById('user-avatar');
 
   // Check authentication status using background script validation
   chrome.runtime.sendMessage({ action: 'checkAuth' }, (response) => {
@@ -17,13 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
       loginContainer.style.display = 'none';
       featuresContainer.style.display = 'block';
       
-      if (response.userInfo.email) {
-        userEmail.textContent = response.userInfo.email;
-        userInitial.textContent = response.userInfo.email.charAt(0).toUpperCase();
-      } else if (response.userInfo.name) {
-        userEmail.textContent = response.userInfo.name;
-        userInitial.textContent = response.userInfo.name.charAt(0).toUpperCase();
-      }
+      displayUserInfo(response.userInfo);
     } else {
       loginContainer.style.display = 'block';
       featuresContainer.style.display = 'none';
@@ -45,12 +40,8 @@ document.addEventListener('DOMContentLoaded', () => {
         loginContainer.style.display = 'none';
         featuresContainer.style.display = 'block';
         
-        if (response.userInfo && response.userInfo.email) {
-          userEmail.textContent = response.userInfo.email;
-          userInitial.textContent = response.userInfo.email.charAt(0).toUpperCase();
-        } else if (response.userInfo && response.userInfo.name) {
-          userEmail.textContent = response.userInfo.name;
-          userInitial.textContent = response.userInfo.name.charAt(0).toUpperCase();
+        if (response.userInfo) {
+          displayUserInfo(response.userInfo);
         }
       } else {
         showErrorMessage('Authentication failed. Please try again.');
@@ -139,6 +130,32 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   
   // Helper functions
+  function displayUserInfo(userInfo) {
+    if (userInfo.email) {
+      userEmail.textContent = userInfo.email;
+      userInitial.textContent = userInfo.email.charAt(0).toUpperCase();
+    } else if (userInfo.name) {
+      userEmail.textContent = userInfo.name;
+      userInitial.textContent = userInfo.name.charAt(0).toUpperCase();
+    }
+    
+    // Handle profile picture
+    if (userInfo.picture) {
+      userAvatar.src = userInfo.picture;
+      userAvatar.style.display = 'block';
+      userInitial.style.display = 'none';
+      
+      // Fallback to initials if image fails to load
+      userAvatar.onerror = () => {
+        userAvatar.style.display = 'none';
+        userInitial.style.display = 'block';
+      };
+    } else {
+      userAvatar.style.display = 'none';
+      userInitial.style.display = 'block';
+    }
+  }
+
   function showSuccessMessage(element, message) {
     const successMessage = document.createElement('div');
     successMessage.classList.add('success-message');
