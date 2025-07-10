@@ -82,7 +82,22 @@ app.get('/health', (req, res) => {
 });
 
 // API routes
-app.use('/api/summary', summaryRoutes(pool)); // Pass the pool to the router
+// backend/server.js (only this snippet needs modification)
+
+// ... (top of file, after dotenv config and pool setup) ...
+const UserManager = require('./utils/userManager'); // Make sure path is correct!
+
+// NEW: Initialize userManager instance
+const userManager = new UserManager(pool);
+
+// ... (further down in the file) ...
+
+// API routes - IMPORTANT: Pass the userManager instance here
+app.use('/api/summary', summaryRoutes(pool, userManager));
+
+
+
+
 
 // Start server with error handling
 const server = app.listen(PORT, () => {
