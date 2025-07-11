@@ -5,7 +5,7 @@ const { Pool } = require('pg');
 class UserManager {
     constructor(pool) {
         this.pool = pool;
-        this.freeLimit = 5; // Default free limit for non-pioneer users
+        this.freeLimit = 7; // Default free limit for non-pioneer users
     }
 
     /**

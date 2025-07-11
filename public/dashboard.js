@@ -10,8 +10,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const confirmationModal = document.getElementById('confirmation-modal');
   const cancelDeleteButton = document.getElementById('cancel-delete');
   const confirmDeleteButton = document.getElementById('confirm-delete');
-  const userEmail = document.getElementById('user-email');
-  const userInitial = document.getElementById('user-initial');
+  const userEmailElement = document.getElementById('dashboard-user-email'); // Changed ID
+  const userInitialElement = document.getElementById('dashboard-user-initial'); // Changed ID
+  const userAvatarElement = document.getElementById('dashboard-user-avatar'); // NEW element
   const loadMoreContainer = document.querySelector('.load-more-container');
   
   let videos = [];
@@ -43,20 +44,48 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load user info
     chrome.storage.local.get('userInfo', (result) => {
       console.log('👤 Loading user info:', result);
-      if (result.userInfo) {
-        if (result.userInfo.email) {
-          userEmail.textContent = result.userInfo.email;
-          userInitial.textContent = result.userInfo.email.charAt(0).toUpperCase();
-        } else if (result.userInfo.name) {
-          userEmail.textContent = result.userInfo.name;
-          userInitial.textContent = result.userInfo.name.charAt(0).toUpperCase();
-        } else {
-          userEmail.textContent = "Welcome back!";
-          userInitial.textContent = "👋";
+if (result.userInfo) {
+        const userInfo = result.userInfo; // Store userInfo for easier access
+
+        // Display user email
+        if (userEmailElement) { // Use the new constant name
+          userEmailElement.textContent = userInfo.email || 'N/A';
+        }
+
+        // Handle profile picture and initial
+        if (userAvatarElement && userInitialElement) { // Use the new constant names
+          if (userInfo.picture) {
+            userAvatarElement.src = userInfo.picture;
+            userAvatarElement.style.display = 'block'; // Show the image
+            userInitialElement.style.display = 'none'; // Hide the initial
+            userInitialElement.textContent = ''; // Clear initial text
+
+            // Fallback to initials if image fails to load
+            userAvatarElement.onerror = () => {
+              userAvatarElement.style.display = 'none'; // Hide image if it fails
+              userInitialElement.style.display = 'block'; // Show initial instead
+              userInitialElement.textContent = userInfo.name ? userInfo.name.charAt(0).toUpperCase() : (userInfo.email ? userInfo.email.charAt(0).toUpperCase() : 'U'); // Set initial on error
+            };
+          } else {
+            // If no picture URL, hide image and show initial
+            userAvatarElement.style.display = 'none';
+            userInitialElement.style.display = 'block';
+            userInitialElement.textContent = userInfo.name ? userInfo.name.charAt(0).toUpperCase() : (userInfo.email ? userInfo.email.charAt(0).toUpperCase() : 'U');
+          }
+        } else if (userInitialElement) { // Fallback if only initial element exists (shouldn't happen with correct HTML)
+            userInitialElement.textContent = userInfo.name ? userInfo.name.charAt(0).toUpperCase() : (userInfo.email ? userInfo.email.charAt(0).toUpperCase() : 'U');
         }
       } else {
-        userEmail.textContent = "Welcome to Dashboard";
-        userInitial.textContent = "👋";
+        // Handle case where no user info is available (e.g., not signed in)
+        if (userEmailElement) {
+          userEmailElement.textContent = "Welcome to Dashboard";
+        }
+        if (userInitialElement) {
+          userInitialElement.textContent = "👋";
+        }
+        if (userAvatarElement) {
+          userAvatarElement.style.display = 'none';
+        }
       }
     });
     

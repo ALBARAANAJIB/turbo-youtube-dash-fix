@@ -55,25 +55,43 @@ header {
 .user-info {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px; /* Space between avatar/initial and email */
 }
 
-.avatar {
-  width: 36px;
-  height: 36px;
-  background: #dc2626;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
+.user-info .avatar { /* More specific selector to ensure it applies */
+  display: flex; /* Use flexbox to center content inside the avatar div */
   justify-content: center;
-  font-weight: 600;
-  font-size: 14px;
-  color: white;
+  align-items: center;
+  width: 36px; /* Size of the avatar container */
+  height: 36px;
+  border-radius: 50%; /* Make it round */
+  background-color: #007bff; /* Default background for initials (changed from red for a softer look, but you can change back to #dc2626 if you prefer) */
+  color: white; /* Color for initials */
+  font-weight: bold; /* Bold text for initials */
+  font-size: 16px; /* Slightly larger font for initials */
+  overflow: hidden; /* Ensures profile pic stays within bounds */
 }
 
-#user-email {
-  color: #666;
+.user-info .user-avatar { /* New style for the image itself */
+  width: 100%; /* Make image fill its container */
+  height: 100%; /* Make image fill its container */
+  border-radius: 50%; /* Keep image round */
+  object-fit: cover; /* Crop image to fit without distortion */
+  display: block; /* Ensure it's a block element for sizing */
+}
+
+.user-info .user-initial { /* New style for the initial span */
+  /* No specific width/height needed here, it will take the size of its parent .avatar */
+  text-align: center;
+}
+
+.user-info #dashboard-user-email { /* Updated selector for the email span */
   font-size: 14px;
+  color: #555; /* Slightly darker color for better contrast */
+  white-space: nowrap; /* Prevent email from wrapping */
+  overflow: hidden;
+  text-overflow: ellipsis; /* Add ellipsis if too long */
+  max-width: 150px; /* Adjust as needed to prevent very long emails from pushing content */
 }
 
 /* Main Content */
